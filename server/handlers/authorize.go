@@ -1,0 +1,85 @@
+package handlers
+
+import (
+	"html/template"
+	"net/http"
+)
+
+// loginPageData: login.html 템플릿에 넘겨줄 데이터 구조체
+type loginPageData struct {
+	ClientName  string
+	State       string
+	ClientID    string
+	RedirectURI string
+	Scope       string
+	ErrorMsg    string
+}
+
+// Phase 1: DB 없이 하드코딩된 허용 클라이언트 목록
+// key: client_id, value: 허용된 redirect_uri 목록
+var allowedClients = map[string][]string{
+	"example-app": {"http://localhost:8081/callback"},
+}
+
+// AuthorizeHandler: GET /oauth/authorize 처리
+// 클로저 패턴 — 템플릿을 인자로 받아서 핸들러 함수를 반환함
+func AuthorizeHandler(tmpl *template.Template) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		responseType := q.Get("response_type")
+		clientID     := q.Get("client_id")
+		redirectURI  := q.Get("redirect_uri")
+		state        := q.Get("state")
+		scope        := q.Get("scope")
+
+		// redirect_uri 검증을 가장 먼저 해야 함
+		// 이유: redirect_uri가 잘못됐을 때 절대 거기로 리다이렉트 하면 안 됨
+		// → 오픈 리다이렉트 취약점(공격자가 악성 사이트로 유도)이 생기기 때문
+		uris, ok := allowedClients[clientID]
+		if !ok || !containsURI(uris, redirectURI) {
+			renderError(w, tmpl, "유효하지 않은 client_id 또는 redirect_uri입니다")
+			return
+		}
+
+		// response_type은 반드시 "code" 여야 함 (Authorization Code Flow)
+		// 오류 시에는 redirect_uri로 에러 파라미터를 붙여서 돌려보냄
+		if responseType != "code" {
+			http.Redirect(w, r,
+				redirectURI+"?error=unsupported_response_type&state="+state,
+				http.StatusFound,
+			)
+			return
+		}
+
+		// 여기까지 왔으면 정상 — 로그인 페이지를 보여줌
+		data := loginPageData{
+			ClientName:  clientID,
+			State:       state,
+			ClientID:    clientID,
+			RedirectURI: redirectURI,
+			Scope:       scope,
+		}
+		if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
+			http.Error(w, "템플릿 렌더링 실패", http.StatusInternalServerError)
+		}
+	}
+}
+
+// renderError: redirect_uri 자체가 잘못된 경우 전용 에러 페이지 표시
+// 이때는 리다이렉트 하면 안 되므로 에러 페이지를 직접 렌더링함
+func renderError(w http.ResponseWriter, tmpl *template.Template, msg string) {
+	w.WriteHeader(http.StatusBadRequest)
+	tmpl.ExecuteTemplate(w, "error.html", loginPageData{ErrorMsg: msg})
+}
+
+// containsURI: 허용된 URI 목록에 포함되어 있는지 검사
+// 반드시 완전 일치(exact match)로 비교해야 함
+// 접두사 일치(prefix match)를 쓰면 공격자가 example.com.evil.com 같은 걸 통과시킬 수 있음
+func containsURI(uris []string, target string) bool {
+	for _, u := range uris {
+		if u == target {
+			return true
+		}
+	}
+	return false
+}

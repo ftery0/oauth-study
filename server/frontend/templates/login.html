@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>{{.ClientName}} 로그인</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="login-box">
+        <h1>{{.ClientName}}</h1>
+        <p>로그인하여 계속하세요</p>
+
+        {{if .ErrorMsg}}
+        <p class="error">{{.ErrorMsg}}</p>
+        {{end}}
+
+        <!--
+            action="/oauth/login" → 로그인 처리 핸들러로 전송
+            method="POST" → 아이디/비밀번호는 GET URL에 노출되면 안 됨
+        -->
+        <form action="/oauth/login" method="POST">
+            <input type="text" name="username" placeholder="아이디" required autofocus>
+            <input type="password" name="password" placeholder="비밀번호" required>
+
+            <!--
+                hidden 필드: 로그인이 완료된 후 어디로 돌아갈지 알아야 하므로
+                OAuth 파라미터들을 폼과 함께 서버로 전달함
+            -->
+            <input type="hidden" name="state"        value="{{.State}}">
+            <input type="hidden" name="client_id"    value="{{.ClientID}}">
+            <input type="hidden" name="redirect_uri" value="{{.RedirectURI}}">
+            <input type="hidden" name="scope"        value="{{.Scope}}">
+
+            <button type="submit">로그인</button>
+        </form>
+    </div>
+</body>
+</html>

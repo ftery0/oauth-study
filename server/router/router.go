@@ -1,17 +1,22 @@
 package router
 
 import (
+	"html/template"
 	"net/http"
+
+	"github.com/ftery0/ouath/server/handlers"
 )
 
-func New() *http.ServeMux {
+// New: 완성된 핸들러는 실제 함수를, 아직 미구현은 stubHandler로 등록
+// tmpl을 인자로 받는 이유: 핸들러들이 HTML을 렌더링하려면 템플릿이 필요하기 때문
+func New(tmpl *template.Template) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	// Go 1.22부터 "METHOD /path" 형식으로 메서드별 라우팅 가능
-	mux.HandleFunc("GET /oauth/authorize", stubHandler)  // 로그인 페이지 표시
-	mux.HandleFunc("POST /oauth/login", stubHandler)     // 로그인 처리 → auth code 발급
-	mux.HandleFunc("POST /oauth/token", stubHandler)     // auth code → access token 교환
-	mux.HandleFunc("GET /oauth/userinfo", stubHandler)   // 유저 정보 반환 (Bearer 토큰 필요)
+	mux.HandleFunc("GET /oauth/authorize", handlers.AuthorizeHandler(tmpl))
+	mux.HandleFunc("POST /oauth/login", stubHandler)   
+	mux.HandleFunc("POST /oauth/token", stubHandler)   
+	mux.HandleFunc("GET /oauth/userinfo", stubHandler) 
 
 	return mux
 }
