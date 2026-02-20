@@ -15,13 +15,8 @@ func New(tmpl *template.Template) *http.ServeMux {
 	// Go 1.22부터 "METHOD /path" 형식으로 메서드별 라우팅 가능
 	mux.HandleFunc("GET /oauth/authorize", handlers.AuthorizeHandler(tmpl))
 	mux.HandleFunc("POST /oauth/login", handlers.LoginHandler(tmpl))
-	mux.HandleFunc("POST /oauth/token", stubHandler)   
-	mux.HandleFunc("GET /oauth/userinfo", stubHandler) 
+	mux.HandleFunc("POST /oauth/token", handlers.TokenHandler)
+	mux.HandleFunc("GET /oauth/userinfo", handlers.UserInfoHandler)
 
 	return mux
-}
-
-// stubHandler: 아직 구현 전인 핸들러 임시 자리
-func stubHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
 }
