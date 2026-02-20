@@ -14,7 +14,7 @@ func New(tmpl *template.Template) *http.ServeMux {
 
 	// Go 1.22부터 "METHOD /path" 형식으로 메서드별 라우팅 가능
 	mux.HandleFunc("GET /oauth/authorize", handlers.AuthorizeHandler(tmpl))
-	mux.HandleFunc("POST /oauth/login", stubHandler)   
+	mux.HandleFunc("POST /oauth/login", handlers.LoginHandler(tmpl))
 	mux.HandleFunc("POST /oauth/token", stubHandler)   
 	mux.HandleFunc("GET /oauth/userinfo", stubHandler) 
 
