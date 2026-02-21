@@ -15,12 +15,12 @@ import (
 
 func LoginHandler(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id          := r.FormValue("id")
-		password    := r.FormValue("password")
-		state       := r.FormValue("state")
-		clientID    := r.FormValue("client_id")
+		id := r.FormValue("id")
+		password := r.FormValue("password")
+		state := r.FormValue("state")
+		clientID := r.FormValue("client_id")
 		redirectURI := r.FormValue("redirect_uri")
-		scope       := r.FormValue("scope")
+		scope := r.FormValue("scope")
 
 		err := bcrypt.CompareHashAndPassword(
 			[]byte(models.TestUser.PasswordHash),
