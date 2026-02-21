@@ -13,16 +13,27 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-var secretKey = []byte("ouath-dev-secret-change-in-production") // 나중에 비대칭키로 교체 예정
+var (
+	secretKey []byte
+	issuerVal string
+)
+
+// Init: main에서 설정 로드 후 호출 (시크릿, iss 클레임 설정)
+func Init(secret, issuer string) {
+	secretKey = []byte(secret)
+	issuerVal = issuer
+}
 
 func Create(userID, clientID, scope string) (string, error) {
+	now := time.Now()
 	claims := Claims{
 		UserID:   userID,
 		ClientID: clientID,
 		Scope:    scope,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(now.Add(15 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			Issuer:    issuerVal,
 		},
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS512, claims).SignedString(secretKey)

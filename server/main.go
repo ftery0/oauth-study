@@ -10,6 +10,7 @@ import (
 
 	"github.com/ftery0/ouath/server/config"
 	"github.com/ftery0/ouath/server/router"
+	"github.com/ftery0/ouath/server/token"
 )
 
 // go:embed 지시어: 빌드 시 frontend 폴더 전체를 바이너리 안에 포함시킴
@@ -20,6 +21,7 @@ var frontendFS embed.FS
 
 func main() {
 	cfg := config.Load()
+	token.Init(cfg.JWTSecret, cfg.Issuer)
 
 	// 템플릿 파싱: embed된 FS에서 templates/*.html 파일을 모두 읽어서 파싱
 	tmpl, err := template.ParseFS(frontendFS, "frontend/templates/*.html")
@@ -37,7 +39,7 @@ func main() {
 	mux := router.New(tmpl)
 
 	addr := ":" + cfg.Port
-	fmt.Printf("ouath server running on %s\n", cfg.Issuer)
+	fmt.Printf("oauth server running on %s\n", cfg.Issuer)
 
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatal(err)
