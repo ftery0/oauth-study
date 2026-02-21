@@ -1,12 +1,18 @@
 package ouath
 
 import (
-	"encoding/json"
+	"encoding/gob"
 	"net/http"
 	"time"
+
+	"github.com/gorilla/securecookie"
 )
 
-const sessionCookie = "ouath_session"
+const sessionCookie = "oauth_session"
+
+func init() {
+	gob.Register(session{})
+}
 
 type session struct {
 	State       string
@@ -15,28 +21,43 @@ type session struct {
 	AccessToken string
 }
 
-func saveSession(w http.ResponseWriter, s session) error {
-	b, err := json.Marshal(s)
+// getSecureCookie: Client의 SessionSecret으로 SecureCookie 인스턴스 생성
+// SessionSecret이 비어있으면 서명만 하는 fallback (하위호환)
+func (c *Client) getSecureCookie() *securecookie.SecureCookie {
+	if c.cfg.SessionSecret == "" {
+		// 개발용: 고정 키 (프로덕션에서는 SessionSecret 필수)
+		hashKey := []byte("oauth-dev-session-secret-32bytes!!")
+		blockKey := []byte("oauth-dev-block-key-32bytes!!")
+		return securecookie.New(hashKey, blockKey)
+	}
+	hashKey, blockKey := deriveKeys(c.cfg.SessionSecret)
+	return securecookie.New(hashKey, blockKey)
+}
+
+func (c *Client) saveSession(w http.ResponseWriter, s session) error {
+	encoded, err := c.getSecureCookie().Encode(sessionCookie, s)
 	if err != nil {
 		return err
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
-		Value:    string(b),
+		Value:    encoded,
 		Path:     "/",
-		HttpOnly: true, // JS에서 쿠키 접근 차단
+		HttpOnly: true,
+		Secure:   false, // HTTPS 환경에서는 true로
+		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(24 * time.Hour),
 	})
 	return nil
 }
 
-func loadSession(r *http.Request) (session, bool) {
-	c, err := r.Cookie(sessionCookie)
+func (c *Client) loadSession(r *http.Request) (session, bool) {
+	cookie, err := r.Cookie(sessionCookie)
 	if err != nil {
 		return session{}, false
 	}
 	var s session
-	if err := json.Unmarshal([]byte(c.Value), &s); err != nil {
+	if err := c.getSecureCookie().Decode(sessionCookie, cookie.Value, &s); err != nil {
 		return session{}, false
 	}
 	return s, true
