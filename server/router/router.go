@@ -17,6 +17,8 @@ func New(tmpl *template.Template) *http.ServeMux {
 	mux.HandleFunc("POST /oauth/login", handlers.LoginHandler(tmpl))
 	mux.HandleFunc("POST /oauth/token", handlers.TokenHandler)
 	mux.HandleFunc("GET /oauth/userinfo", handlers.UserInfoHandler)
+	// JWKS: 공개키 배포 엔드포인트 (클라이언트가 JWT 서명을 자체 검증할 때 사용)
+	mux.HandleFunc("GET /oauth/jwks", handlers.JWKSHandler)
 
 	return mux
 }

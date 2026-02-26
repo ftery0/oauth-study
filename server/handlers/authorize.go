@@ -18,7 +18,8 @@ type loginPageData struct {
 // Phase 1: DB 없이 하드코딩된 허용 클라이언트 목록
 // key: client_id, value: 허용된 redirect_uri 목록
 var allowedClients = map[string][]string{
-	"example-app": {"http://localhost:8081/callback"},
+	// example 앱의 redirect_uri: Vite(5173) → Vite proxy → Express(3001)로 전달됨
+	"example-app": {"http://localhost:5173/callback"},
 }
 
 // AuthorizeHandler: GET /oauth/authorize 처리
