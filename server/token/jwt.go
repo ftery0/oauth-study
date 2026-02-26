@@ -22,6 +22,7 @@ var (
 	// → 인가 서버만 서명 가능, 다른 서버들은 공개키로 검증만 가능 (보안상 안전)
 	privateKey *rsa.PrivateKey
 	PublicKey  *rsa.PublicKey // JWKS 엔드포인트를 통해 외부에 공개
+	issuerVal  string
 )
 
 func init() {
@@ -34,14 +35,21 @@ func init() {
 	PublicKey = &privateKey.PublicKey
 }
 
+// Init: main에서 설정 로드 후 호출 (iss 클레임 설정)
+func Init(_, issuer string) {
+	issuerVal = issuer
+}
+
 func Create(userID, clientID, scope string) (string, error) {
+	now := time.Now()
 	claims := Claims{
 		UserID:   userID,
 		ClientID: clientID,
 		Scope:    scope,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(15 * time.Minute)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(now.Add(15 * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			Issuer:    issuerVal,
 		},
 	}
 	// HS512(대칭키) → RS256(비대칭키)로 변경

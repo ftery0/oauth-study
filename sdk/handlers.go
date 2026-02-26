@@ -10,7 +10,7 @@ import (
 func (c *Client) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	state, _ := randomHex(16)
 
-	saveSession(w, session{
+	c.saveSession(w, session{
 		State:      state,
 		RedirectTo: r.URL.Query().Get("next"),
 	})
@@ -26,7 +26,7 @@ func (c *Client) LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Client) CallbackHandler(w http.ResponseWriter, r *http.Request) {
-	sess, ok := loadSession(r)
+	sess, ok := c.loadSession(r)
 	if !ok || sess.State != r.URL.Query().Get("state") {
 		http.Error(w, "유효하지 않은 state", http.StatusBadRequest)
 		return
@@ -46,7 +46,7 @@ func (c *Client) CallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	saveSession(w, session{
+	c.saveSession(w, session{
 		UserID:      userID,
 		AccessToken: accessToken,
 	})

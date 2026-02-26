@@ -3,6 +3,7 @@ package ouath
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -30,14 +31,28 @@ func (c *Client) exchangeToken(code string) (string, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("토큰 교환 실패 (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
 	var result struct {
 		AccessToken string `json:"access_token"`
+		Error       string `json:"error"`
+		ErrorDesc   string `json:"error_description"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", err
 	}
 	if result.AccessToken == "" {
-		return "", fmt.Errorf("빈 access token")
+		msg := result.ErrorDesc
+		if msg == "" {
+			msg = result.Error
+		}
+		if msg == "" {
+			msg = "빈 access token"
+		}
+		return "", fmt.Errorf("토큰 교환 실패: %s", msg)
 	}
 	return result.AccessToken, nil
 }
@@ -52,6 +67,11 @@ func (c *Client) fetchUserID(accessToken string) (string, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("유저 정보 조회 실패 (HTTP %d): %s", resp.StatusCode, string(body))
+	}
+
 	var result struct {
 		Sub string `json:"sub"`
 	}
@@ -62,8 +82,8 @@ func (c *Client) fetchUserID(accessToken string) (string, error) {
 }
 
 // UserFromSession: 핸들러 안에서 현재 로그인된 유저 ID를 꺼낼 때 사용
-func UserFromSession(r *http.Request) (string, bool) {
-	sess, ok := loadSession(r)
+func (c *Client) UserFromSession(r *http.Request) (string, bool) {
+	sess, ok := c.loadSession(r)
 	if !ok || sess.UserID == "" {
 		return "", false
 	}

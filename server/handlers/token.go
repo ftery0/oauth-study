@@ -12,16 +12,29 @@ import (
 	"github.com/ftery0/ouath/server/token"
 )
 
-// Phase 1 하드코딩 클라이언트 시크릿
-var testClientSecret = "secret"
+// tokenError: OAuth 2.0 RFC 6749 Section 5.2 - 토큰 엔드포인트 에러는 JSON으로 반환
+func tokenError(w http.ResponseWriter, errorCode, description string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{
+		"error":             errorCode,
+		"error_description": description,
+	})
+}
 
 func TokenHandler(w http.ResponseWriter, r *http.Request) {
-	// 클라이언트 앱은 HTTP Basic Auth로 자신을 증명: Authorization: Basic base64(client_id:secret)
+	// 클라이언트 앱은 HTTP Basic Auth로 자신을 증명
 	clientID, clientSecret, ok := r.BasicAuth()
-	if !ok || clientSecret != testClientSecret {
-		http.Error(w, "client 인증 실패", http.StatusUnauthorized)
+	if !ok {
+		tokenError(w, "invalid_client", "client 인증 실패", http.StatusUnauthorized)
 		return
 	}
+	client, ok := store.Clients.GetByClientID(clientID)
+	if !ok || client.ClientSecret != clientSecret {
+		tokenError(w, "invalid_client", "client 인증 실패", http.StatusUnauthorized)
+		return
+	}
+	_ = client // 검증 완료
 
 	switch r.FormValue("grant_type") {
 	case "authorization_code":
@@ -31,7 +44,7 @@ func TokenHandler(w http.ResponseWriter, r *http.Request) {
 		// 장점: 사용자가 다시 로그인하지 않아도 됨
 		handleRefreshToken(w, r, clientID)
 	default:
-		http.Error(w, "지원하지 않는 grant_type", http.StatusBadRequest)
+		tokenError(w, "unsupported_grant_type", "지원하지 않는 grant_type", http.StatusBadRequest)
 	}
 }
 
@@ -39,16 +52,21 @@ func handleAuthorizationCode(w http.ResponseWriter, r *http.Request, clientID st
 	code        := r.FormValue("code")
 	redirectURI := r.FormValue("redirect_uri")
 
+	if code == "" || redirectURI == "" {
+		tokenError(w, "invalid_request", "code 또는 redirect_uri가 필요합니다", http.StatusBadRequest)
+		return
+	}
+
 	// LoadAndDelete: 꺼내는 동시에 삭제 → auth code 재사용 방지
 	val, ok := store.AuthCodes.LoadAndDelete(code)
 	if !ok {
-		http.Error(w, "유효하지 않은 code", http.StatusBadRequest)
+		tokenError(w, "invalid_grant", "유효하지 않은 code", http.StatusBadRequest)
 		return
 	}
 
 	ac := val.(models.AuthCode)
 	if time.Now().After(ac.ExpiresAt) || ac.ClientID != clientID || ac.RedirectURI != redirectURI {
-		http.Error(w, "code 검증 실패", http.StatusBadRequest)
+		tokenError(w, "invalid_grant", "code 검증 실패", http.StatusBadRequest)
 		return
 	}
 
@@ -62,7 +80,7 @@ func handleRefreshToken(w http.ResponseWriter, r *http.Request, clientID string)
 	// 매 갱신마다 새 refresh token을 발급 → 탈취된 토큰 감지 가능
 	val, ok := store.RefreshTokens.LoadAndDelete(rtStr)
 	if !ok {
-		http.Error(w, "유효하지 않은 refresh_token", http.StatusBadRequest)
+		tokenError(w, "invalid_grant", "유효하지 않은 refresh_token", http.StatusBadRequest)
 		return
 	}
 

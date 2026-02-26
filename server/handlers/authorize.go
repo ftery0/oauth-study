@@ -3,6 +3,8 @@ package handlers
 import (
 	"html/template"
 	"net/http"
+
+	"github.com/ftery0/ouath/server/store"
 )
 
 // loginPageData: login.html 템플릿에 넘겨줄 데이터 구조체
@@ -15,15 +17,7 @@ type loginPageData struct {
 	ErrorMsg    string
 }
 
-// Phase 1: DB 없이 하드코딩된 허용 클라이언트 목록
-// key: client_id, value: 허용된 redirect_uri 목록
-var allowedClients = map[string][]string{
-	// example 앱의 redirect_uri: Vite(5173) → Vite proxy → Express(3001)로 전달됨
-	"example-app": {"http://localhost:5173/callback"},
-}
-
 // AuthorizeHandler: GET /oauth/authorize 처리
-// 클로저 패턴 — 템플릿을 인자로 받아서 핸들러 함수를 반환함
 func AuthorizeHandler(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
@@ -33,11 +27,9 @@ func AuthorizeHandler(tmpl *template.Template) http.HandlerFunc {
 		state        := q.Get("state")
 		scope        := q.Get("scope")
 
-		// redirect_uri 검증을 가장 먼저 해야 함
-		// 이유: redirect_uri가 잘못됐을 때 절대 거기로 리다이렉트 하면 안 됨
-		// → 오픈 리다이렉트 취약점(공격자가 악성 사이트로 유도)이 생기기 때문
-		uris, ok := allowedClients[clientID]
-		if !ok || !containsURI(uris, redirectURI) {
+		// redirect_uri 검증을 가장 먼저 해야 함 (오픈 리다이렉트 방지)
+		client, ok := store.Clients.GetByClientID(clientID)
+		if !ok || !containsURI(client.RedirectURIs, redirectURI) {
 			renderError(w, tmpl, "유효하지 않은 client_id 또는 redirect_uri입니다")
 			return
 		}
@@ -52,9 +44,9 @@ func AuthorizeHandler(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		// 여기까지 왔으면 정상 — 로그인 페이지를 보여줌
+		// 여기까지 왔으면 정상 — 로그인 페이지를 보여줌 (서비스명은 Client.Name 사용)
 		data := loginPageData{
-			ClientName:  clientID,
+			ClientName:  client.Name,
 			State:       state,
 			ClientID:    clientID,
 			RedirectURI: redirectURI,
