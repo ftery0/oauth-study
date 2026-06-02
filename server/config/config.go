@@ -3,23 +3,44 @@ package config
 import (
 	"log"
 	"os"
+	"path/filepath"
+
+	"github.com/joho/godotenv"
 )
+
+// loadDotEnvOnce: cwd 의 .env 와 server 디렉토리의 .env 를 둘 다 시도한다.
+// 이미 process env 에 설정된 값은 덮어쓰지 않는다 (env 변수 우선).
+func loadDotEnvOnce() {
+	_ = godotenv.Load(".env")
+	if exe, err := os.Executable(); err == nil {
+		_ = godotenv.Load(filepath.Join(filepath.Dir(exe), ".env"))
+	}
+}
 
 // dev 기본 secret 들. production 환경에서는 이 값으로 동작하지 않도록 fail-fast.
 const (
-	devDefaultJWTSecret        = "oauth-dev-secret-change-in-production"
-	devDefaultIdPSessionSecret = "idp-session-dev-secret-change-in-production"
+	devDefaultJWTSecret          = "oauth-dev-secret-change-in-production"
+	devDefaultIdPSessionSecret   = "idp-session-dev-secret-change-in-production"
+	devDefaultAdminSessionSecret = "admin-session-dev-secret-change-in-production"
+	// devDefaultAdminPasswordHash: bcrypt("admin", cost=12) 학습용. production 에서는 반드시 교체.
+	// 새 hash 생성: go run ./cmd/hashgen <password>
+	devDefaultAdminPasswordHash = "$2a$12$M5kxy0ym964CE65bZG2vt.HwHi1Wt/FnGoIvVsI//cXSMFKevEWAO"
 )
 
 type Config struct {
-	Env              string // "development" | "production"
-	Port             string
-	Issuer           string
-	JWTSecret        string
-	IdPSessionSecret string // IdP 세션 쿠키 SecureCookie 키 도출용
+	Env                string // "development" | "production"
+	Port               string
+	Issuer             string
+	JWTSecret          string
+	IdPSessionSecret   string // IdP 세션 쿠키 SecureCookie 키 도출용
+	AdminPasswordHash  string // bcrypt hash. 어드민 게이트 비밀번호 검증
+	AdminSessionSecret string // 어드민 세션 쿠키 SecureCookie 키 도출용
+	DatabaseURL        string // Postgres DSN. 비어있으면 DB 연결 시도하지 않음 (P2-B)
 }
 
 func Load() Config {
+	loadDotEnvOnce()
+
 	env := os.Getenv("APP_ENV")
 	if env == "" {
 		env = "development"
@@ -37,13 +58,22 @@ func Load() Config {
 
 	jwtSecret := requireSecret(env, "OAUTH_JWT_SECRET", devDefaultJWTSecret)
 	idpSessionSecret := requireSecret(env, "IDP_SESSION_SECRET", devDefaultIdPSessionSecret)
+	adminSessionSecret := requireSecret(env, "DAUTH_ADMIN_SESSION_SECRET", devDefaultAdminSessionSecret)
+	adminPasswordHash := requireSecret(env, "DAUTH_ADMIN_PASSWORD_HASH", devDefaultAdminPasswordHash)
+
+	// DATABASE_URL: 비어있으면 DB 연결 안 함 (P2-B 학습 호환).
+	// 권장 형식: postgres://dauth:dauth-dev@localhost:5433/dauth?sslmode=disable
+	databaseURL := os.Getenv("DATABASE_URL")
 
 	return Config{
-		Env:              env,
-		Port:             port,
-		Issuer:           issuer,
-		JWTSecret:        jwtSecret,
-		IdPSessionSecret: idpSessionSecret,
+		Env:                env,
+		Port:               port,
+		Issuer:             issuer,
+		JWTSecret:          jwtSecret,
+		IdPSessionSecret:   idpSessionSecret,
+		AdminPasswordHash:  adminPasswordHash,
+		AdminSessionSecret: adminSessionSecret,
+		DatabaseURL:        databaseURL,
 	}
 }
 
