@@ -25,6 +25,7 @@ func main() {
 	cfg := config.Load()
 	token.Init(cfg.JWTSecret, cfg.Issuer)
 	handlers.IdPCookieInit(cfg.IdPSessionSecret)
+	handlers.SetProduction(cfg.Env == "production")
 	store.IdPSessions.StartCleanup()
 
 	// 템플릿 파싱: embed된 FS에서 templates/*.html 파일을 모두 읽어서 파싱
