@@ -2,13 +2,14 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>오류 - oauth</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <div class="login-box">
-        <h1>오류가 발생했습니다</h1>
-        <p class="error">{{.ErrorMsg}}</p>
-    </div>
+<body class="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans antialiased text-slate-900">
+    <main class="w-full max-w-md bg-white rounded-2xl shadow-lg p-6 sm:p-8 text-center">
+        <h1 class="text-xl sm:text-2xl font-semibold">오류가 발생했습니다</h1>
+        <p class="mt-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700" role="alert">{{.ErrorMsg}}</p>
+    </main>
 </body>
 </html>
