@@ -31,6 +31,8 @@ func init() {
 		RedirectURIs: []string{"http://localhost:8081/callback"},
 		OwnerID:      "",
 		CreatedAt:    time.Now(),
+		GroupID:      "marketing-tools",
+		SSOOverride:  models.OverrideInherit,
 	})
 }
 
