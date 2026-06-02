@@ -73,8 +73,8 @@ func extractCSRF(t *testing.T, body string) string {
 func authorizeURL(srvURL string, extra url.Values) string {
 	q := url.Values{
 		"response_type": {"code"},
-		"client_id":     {"example-app"},
-		"redirect_uri":  {"http://localhost:8081/callback"},
+		"client_id":     {"app1"},
+		"redirect_uri":  {"http://localhost:8011/callback"},
 		"state":         {"t"},
 		"scope":         {""},
 	}
@@ -100,8 +100,8 @@ func loginViaForm(t *testing.T, srv *httptest.Server, client *http.Client) {
 	resp2, err := client.PostForm(srv.URL+"/oauth/login", url.Values{
 		"id":           {"alice"},
 		"password":     {"password123"},
-		"client_id":    {"example-app"},
-		"redirect_uri": {"http://localhost:8081/callback"},
+		"client_id":    {"app1"},
+		"redirect_uri": {"http://localhost:8011/callback"},
 		"state":        {"t"},
 		"scope":        {""},
 		"csrf_token":   {csrf},
@@ -126,8 +126,8 @@ func TestIntegration_NoCSRF_PostBlocked(t *testing.T) {
 	resp, err := client.PostForm(srv.URL+"/oauth/login", url.Values{
 		"id":           {"alice"},
 		"password":     {"password123"},
-		"client_id":    {"example-app"},
-		"redirect_uri": {"http://localhost:8081/callback"},
+		"client_id":    {"app1"},
+		"redirect_uri": {"http://localhost:8011/callback"},
 		"state":        {"t"},
 		"scope":        {""},
 	})
@@ -162,8 +162,8 @@ func TestIntegration_FullLoginFlow_ReturnsCodeAndSetsSession(t *testing.T) {
 	resp2, err := client.PostForm(srv.URL+"/oauth/login", url.Values{
 		"id":           {"alice"},
 		"password":     {"password123"},
-		"client_id":    {"example-app"},
-		"redirect_uri": {"http://localhost:8081/callback"},
+		"client_id":    {"app1"},
+		"redirect_uri": {"http://localhost:8011/callback"},
 		"state":        {"t"},
 		"scope":        {""},
 		"csrf_token":   {csrf},
@@ -177,7 +177,7 @@ func TestIntegration_FullLoginFlow_ReturnsCodeAndSetsSession(t *testing.T) {
 		t.Fatalf("got %d, want 302", resp2.StatusCode)
 	}
 	loc := resp2.Header.Get("Location")
-	if !strings.HasPrefix(loc, "http://localhost:8081/callback?") || !strings.Contains(loc, "code=") {
+	if !strings.HasPrefix(loc, "http://localhost:8011/callback?") || !strings.Contains(loc, "code=") {
 		t.Errorf("Location 비정상: %s", loc)
 	}
 
@@ -231,8 +231,8 @@ func TestIntegration_OpenRedirect_StateEscaped(t *testing.T) {
 	payload := "evil&error=injected&iss=evil.com"
 	q := url.Values{
 		"response_type": {"ATTACK"},
-		"client_id":     {"example-app"},
-		"redirect_uri":  {"http://localhost:8081/callback"},
+		"client_id":     {"app1"},
+		"redirect_uri":  {"http://localhost:8011/callback"},
 		"state":         {payload},
 	}
 	resp, err := client.Get(srv.URL + "/oauth/authorize?" + q.Encode())

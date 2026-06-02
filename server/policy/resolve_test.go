@@ -9,8 +9,8 @@ import (
 // TestResolve 는 설계 문서 §4.3 진리표를 그대로 단위 테스트로 굳힌다.
 // 핸들러를 띄우지 않고도 정책 분기의 회귀를 영구 차단한다.
 func TestResolve(t *testing.T) {
-	groupON := &models.ProjectGroup{ID: "marketing-tools", SSODefault: models.SSODefaultON}
-	groupOFF := &models.ProjectGroup{ID: "admin-tools", SSODefault: models.SSODefaultOFF}
+	groupON := &models.ProjectGroup{ID: "group-a", SSODefault: models.SSODefaultON}
+	groupOFF := &models.ProjectGroup{ID: "group-b", SSODefault: models.SSODefaultOFF}
 
 	clientIn := func(groupID string, override models.AppSSOOverride) *models.Client {
 		return &models.Client{ClientID: "c-test", GroupID: groupID, SSOOverride: override}
@@ -29,7 +29,7 @@ func TestResolve(t *testing.T) {
 		// 1. 세션 없음, prompt 기본 → PROMPT
 		{
 			name:   "세션 없음, 기본 prompt",
-			client: clientIn("marketing-tools", models.OverrideInherit),
+			client: clientIn("group-a", models.OverrideInherit),
 			group:  groupON,
 			want:   DecisionPrompt,
 		},
@@ -37,7 +37,7 @@ func TestResolve(t *testing.T) {
 		{
 			name:   "세션 없음, prompt=none",
 			prompt: "none",
-			client: clientIn("marketing-tools", models.OverrideInherit),
+			client: clientIn("group-a", models.OverrideInherit),
 			group:  groupON,
 			want:   DecisionError,
 		},
@@ -45,8 +45,8 @@ func TestResolve(t *testing.T) {
 		{
 			name:           "cross-group, 기본 prompt",
 			hasSession:     true,
-			sessionGroupID: "admin-tools",
-			client:         clientIn("marketing-tools", models.OverrideInherit),
+			sessionGroupID: "group-b",
+			client:         clientIn("group-a", models.OverrideInherit),
 			group:          groupON,
 			want:           DecisionPrompt,
 		},
@@ -54,9 +54,9 @@ func TestResolve(t *testing.T) {
 		{
 			name:           "cross-group, prompt=none",
 			hasSession:     true,
-			sessionGroupID: "admin-tools",
+			sessionGroupID: "group-b",
 			prompt:         "none",
-			client:         clientIn("marketing-tools", models.OverrideInherit),
+			client:         clientIn("group-a", models.OverrideInherit),
 			group:          groupON,
 			want:           DecisionError,
 		},
@@ -64,8 +64,8 @@ func TestResolve(t *testing.T) {
 		{
 			name:           "같은 그룹 ON + INHERIT",
 			hasSession:     true,
-			sessionGroupID: "marketing-tools",
-			client:         clientIn("marketing-tools", models.OverrideInherit),
+			sessionGroupID: "group-a",
+			client:         clientIn("group-a", models.OverrideInherit),
 			group:          groupON,
 			want:           DecisionSilent,
 		},
@@ -73,9 +73,9 @@ func TestResolve(t *testing.T) {
 		{
 			name:           "같은 그룹 ON + prompt=login",
 			hasSession:     true,
-			sessionGroupID: "marketing-tools",
+			sessionGroupID: "group-a",
 			prompt:         "login",
-			client:         clientIn("marketing-tools", models.OverrideInherit),
+			client:         clientIn("group-a", models.OverrideInherit),
 			group:          groupON,
 			want:           DecisionPrompt,
 		},
@@ -83,8 +83,8 @@ func TestResolve(t *testing.T) {
 		{
 			name:           "같은 그룹 ON + FORCE_OFF",
 			hasSession:     true,
-			sessionGroupID: "marketing-tools",
-			client:         clientIn("marketing-tools", models.OverrideForceOFF),
+			sessionGroupID: "group-a",
+			client:         clientIn("group-a", models.OverrideForceOFF),
 			group:          groupON,
 			want:           DecisionPrompt,
 		},
@@ -92,8 +92,8 @@ func TestResolve(t *testing.T) {
 		{
 			name:           "같은 그룹 OFF + INHERIT",
 			hasSession:     true,
-			sessionGroupID: "admin-tools",
-			client:         clientIn("admin-tools", models.OverrideInherit),
+			sessionGroupID: "group-b",
+			client:         clientIn("group-b", models.OverrideInherit),
 			group:          groupOFF,
 			want:           DecisionPrompt,
 		},
@@ -101,8 +101,8 @@ func TestResolve(t *testing.T) {
 		{
 			name:           "같은 그룹 OFF + FORCE_ON",
 			hasSession:     true,
-			sessionGroupID: "admin-tools",
-			client:         clientIn("admin-tools", models.OverrideForceON),
+			sessionGroupID: "group-b",
+			client:         clientIn("group-b", models.OverrideForceON),
 			group:          groupOFF,
 			want:           DecisionSilent,
 		},
@@ -110,9 +110,9 @@ func TestResolve(t *testing.T) {
 		{
 			name:           "같은 그룹 OFF + INHERIT + prompt=none",
 			hasSession:     true,
-			sessionGroupID: "admin-tools",
+			sessionGroupID: "group-b",
 			prompt:         "none",
-			client:         clientIn("admin-tools", models.OverrideInherit),
+			client:         clientIn("group-b", models.OverrideInherit),
 			group:          groupOFF,
 			want:           DecisionError,
 		},
@@ -120,7 +120,7 @@ func TestResolve(t *testing.T) {
 		{
 			name:           "세션 있음 + client 그룹 미소속",
 			hasSession:     true,
-			sessionGroupID: "marketing-tools",
+			sessionGroupID: "group-a",
 			client:         clientNoGroup,
 			group:          nil,
 			want:           DecisionPrompt,
