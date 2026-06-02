@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ouath 어드민</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* native <dialog> 의 기본 backdrop */
+        dialog::backdrop { background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(2px); }
+        dialog[open] { animation: fadeIn 0.12s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-950 antialiased text-slate-100">
+
+    <header class="border-b border-slate-800">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+            <h1 class="text-xl font-semibold tracking-tight">ouath</h1>
+            <form action="/admin/logout" method="POST">
+                <button type="submit" class="text-sm text-slate-400 hover:text-slate-100 transition-colors">로그아웃</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 py-8 space-y-6">
+
+        {{if .FlashMsg}}
+        <div class="rounded-lg px-4 py-3 text-sm {{if .FlashErr}}bg-red-950 border border-red-900 text-red-300{{else}}bg-emerald-950 border border-emerald-900 text-emerald-300{{end}}" role="alert">
+            {{.FlashMsg}}
+        </div>
+        {{end}}
+
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+            <h2 class="text-lg font-semibold mb-1">개요</h2>
+            <p class="text-sm text-slate-400 mb-4">현재 코드 시드 + 등록 데이터. PostgreSQL 영속.</p>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="rounded-lg bg-slate-800/60 border border-slate-800 p-4">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider">그룹</p>
+                    <p class="text-3xl font-bold mt-1">{{len .Groups}}</p>
+                </div>
+                <div class="rounded-lg bg-slate-800/60 border border-slate-800 p-4">
+                    <p class="text-xs text-slate-400 uppercase tracking-wider">등록된 서비스</p>
+                    <p class="text-3xl font-bold mt-1">{{len .Clients}}</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ─────────────  등록된 서비스  ───────────── -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold">등록된 서비스</h2>
+                <a href="/admin/clients/new" class="text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 transition-colors">
+                    + 새 앱
+                </a>
+            </div>
+
+            <!-- 그룹 필터 칩 -->
+            <div class="flex flex-wrap gap-2 mb-4" data-filter-bar>
+                <button type="button" data-filter="all"
+                    class="text-xs rounded-full bg-blue-600 text-white px-3 py-1 transition-colors">
+                    전체 <span class="ml-1 opacity-70">{{len .Clients}}</span>
+                </button>
+                {{range .Groups}}
+                <button type="button" data-filter="{{.ID}}"
+                    class="text-xs rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 transition-colors">
+                    {{.Name}} <span class="ml-1 text-slate-500 font-mono">{{.ID}}</span>
+                    <span class="ml-1 opacity-70" data-count="{{.ID}}"></span>
+                </button>
+                {{end}}
+                <button type="button" data-filter="__none__"
+                    class="text-xs rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 transition-colors">
+                    미소속 <span class="ml-1 opacity-70" data-count="__none__"></span>
+                </button>
+            </div>
+
+            <div class="space-y-2" data-client-list>
+                {{range .Clients}}
+                <button type="button"
+                    data-client-row
+                    data-group="{{if .GroupID}}{{.GroupID}}{{else}}__none__{{end}}"
+                    data-client="m-{{.ClientID}}"
+                    class="w-full text-left rounded-lg border border-slate-800 p-4 hover:bg-slate-800/40 transition-colors flex items-center justify-between gap-3 cursor-pointer">
+                    <div class="min-w-0 flex-1">
+                        <p class="font-medium">{{.Name}}</p>
+                        <p class="text-xs text-slate-500 mt-1 break-all">
+                            <code class="font-mono text-slate-300">{{.ClientID}}</code>
+                            · 그룹 <code class="font-mono text-slate-300">{{if .GroupID}}{{.GroupID}}{{else}}—{{end}}</code>
+                            · <span class="text-slate-400">{{.SSOOverride}}</span>
+                        </p>
+                    </div>
+                    <svg class="w-4 h-4 text-slate-500 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                </button>
+                {{end}}
+            </div>
+
+            <p class="hidden text-sm text-slate-500 mt-4 text-center" data-empty>이 그룹에 속한 서비스가 없습니다.</p>
+        </section>
+
+        <!-- ─────────────  그룹  ───────────── -->
+        <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold">그룹</h2>
+                <button type="button" onclick="document.getElementById('m-new-group').showModal()"
+                    class="text-sm rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 transition-colors">
+                    + 새 그룹
+                </button>
+            </div>
+            <div class="space-y-2">
+                {{range .Groups}}
+                <button type="button"
+                    data-group-row data-group-id="{{.ID}}"
+                    class="w-full text-left rounded-lg border border-slate-800 p-4 hover:bg-slate-800/40 transition-colors cursor-pointer">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="font-medium">{{.Name}}</p>
+                            <p class="text-xs text-slate-500 mt-0.5"><code class="font-mono">{{.ID}}</code></p>
+                        </div>
+                        <span data-sso-badge="{{.ID}}"
+                            class="text-xs font-mono px-2 py-0.5 rounded border {{if eq (printf "%s" .SSODefault) "ON"}}bg-emerald-950 text-emerald-300 border-emerald-900{{else}}bg-amber-950 text-amber-300 border-amber-900{{end}}">
+                            SSO={{.SSODefault}}
+                        </span>
+                    </div>
+                    {{if .Description}}<p class="text-xs text-slate-500 mt-2">{{.Description}}</p>{{end}}
+                </button>
+                {{end}}
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ─────────────  client 상세 모달들  ───────────── -->
+    {{range .Clients}}
+    <dialog id="m-{{.ClientID}}" class="bg-slate-900 border border-slate-800 rounded-2xl p-0 max-w-2xl w-full text-slate-100">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+            <div>
+                <h3 class="text-lg font-semibold">{{.Name}}</h3>
+                <p class="text-xs text-slate-500 mt-0.5"><code class="font-mono">{{.ClientID}}</code></p>
+            </div>
+            <button type="button" onclick="this.closest('dialog').close()"
+                class="text-slate-400 hover:text-slate-100 text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800">×</button>
+        </div>
+
+        <div class="px-6 py-5 space-y-4 text-sm max-h-[70vh] overflow-y-auto">
+            <div class="grid grid-cols-[120px_1fr] gap-x-4 gap-y-3">
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">client_id</dt>
+                <dd><code class="font-mono text-blue-300 break-all select-all">{{.ClientID}}</code></dd>
+
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">client_secret</dt>
+                <dd><code class="font-mono text-amber-300 break-all select-all">{{.ClientSecret}}</code></dd>
+
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">name</dt>
+                <dd>{{.Name}}</dd>
+
+                {{if .Description}}
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">description</dt>
+                <dd>{{.Description}}</dd>
+                {{end}}
+
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">group</dt>
+                <dd><code class="font-mono">{{if .GroupID}}{{.GroupID}}{{else}}(미소속){{end}}</code></dd>
+
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">SSO override</dt>
+                <dd><code class="font-mono">{{.SSOOverride}}</code></dd>
+
+                {{if .MainURL}}
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">main_url</dt>
+                <dd><code class="font-mono text-slate-300 break-all">{{.MainURL}}</code></dd>
+                {{end}}
+
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">redirect_uris</dt>
+                <dd class="space-y-1">
+                    {{range .RedirectURIs}}<p><code class="font-mono text-slate-300 break-all">{{.}}</code></p>{{end}}
+                </dd>
+
+                {{if .ServerURLs}}
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">server_urls</dt>
+                <dd class="space-y-1">
+                    {{range .ServerURLs}}<p><code class="font-mono text-slate-300 break-all">{{.}}</code></p>{{end}}
+                </dd>
+                {{end}}
+
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">created_at</dt>
+                <dd class="text-slate-400 text-xs">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</dd>
+            </div>
+
+            <p class="text-xs text-amber-400/70 pt-2 border-t border-slate-800/60">
+                ⚠ client_secret 은 보안 정보입니다 — 학습 단계 편의로 표시 중. 운영에서는 마스킹 + 재발급 흐름 권장.
+            </p>
+        </div>
+    </dialog>
+    {{end}}
+
+    <!-- ─────────────  그룹 상세 모달들  ───────────── -->
+    {{range .Groups}}
+    {{$gid := .ID}}
+    <dialog id="g-{{.ID}}" class="bg-slate-900 border border-slate-800 rounded-2xl p-0 max-w-2xl w-full text-slate-100">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+            <div>
+                <h3 class="text-lg font-semibold">{{.Name}}</h3>
+                <p class="text-xs text-slate-500 mt-0.5"><code class="font-mono">{{.ID}}</code></p>
+            </div>
+            <button type="button" onclick="this.closest('dialog').close()"
+                class="text-slate-400 hover:text-slate-100 text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800">×</button>
+        </div>
+
+        <div class="px-6 py-5 space-y-5 text-sm max-h-[70vh] overflow-y-auto">
+
+            <div class="grid grid-cols-[120px_1fr] gap-x-4 gap-y-3">
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">id</dt>
+                <dd><code class="font-mono text-blue-300 select-all">{{.ID}}</code></dd>
+
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">name</dt>
+                <dd>{{.Name}}</dd>
+
+                {{if .Description}}
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">description</dt>
+                <dd>{{.Description}}</dd>
+                {{end}}
+
+                <dt class="text-xs uppercase tracking-wider text-slate-500 pt-0.5">created_at</dt>
+                <dd class="text-slate-400 text-xs">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</dd>
+            </div>
+
+            <div class="border-t border-slate-800 pt-4">
+                <p class="text-xs uppercase tracking-wider text-slate-500 mb-3">SSO 기본 정책 <span class="text-slate-600 normal-case">— 클릭으로 즉시 변경</span></p>
+                <div class="flex gap-2" data-sso-toggle="{{.ID}}">
+                    <button type="button" data-sso-set="ON"
+                        class="sso-btn flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors {{if eq (printf "%s" .SSODefault) "ON"}}bg-emerald-600 border-emerald-500 text-white{{else}}bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700{{end}}">
+                        ON · 그룹 내 silent SSO 허용
+                    </button>
+                    <button type="button" data-sso-set="OFF"
+                        class="sso-btn flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors {{if eq (printf "%s" .SSODefault) "OFF"}}bg-amber-600 border-amber-500 text-white{{else}}bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700{{end}}">
+                        OFF · 매번 로그인 필요
+                    </button>
+                </div>
+                <p class="hidden text-xs text-emerald-400 mt-2" data-sso-saved>✓ 변경됨</p>
+                <p class="hidden text-xs text-red-400 mt-2" data-sso-error></p>
+            </div>
+
+            <div class="border-t border-slate-800 pt-4">
+                <p class="text-xs uppercase tracking-wider text-slate-500 mb-3">멤버 서비스</p>
+                <div class="space-y-1.5">
+                    {{$count := 0}}
+                    {{range $.Clients}}
+                    {{if eq .GroupID $gid}}
+                    {{$count = 1}}
+                    <div class="rounded-lg bg-slate-800/50 border border-slate-800 px-3 py-2 flex items-center justify-between text-sm">
+                        <div>
+                            <p>{{.Name}}</p>
+                            <p class="text-xs text-slate-500"><code class="font-mono">{{.ClientID}}</code> · {{.SSOOverride}}</p>
+                        </div>
+                    </div>
+                    {{end}}
+                    {{end}}
+                    {{if eq $count 0}}
+                    <p class="text-xs text-slate-500 italic">이 그룹에 속한 서비스가 없습니다.</p>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+    </dialog>
+    {{end}}
+
+    <!-- ─────────────  새 그룹 모달  ───────────── -->
+    <dialog id="m-new-group" class="bg-slate-900 border border-slate-800 rounded-2xl p-0 max-w-md w-full text-slate-100">
+        <form method="POST" action="/admin/groups">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+                <h3 class="text-lg font-semibold">새 그룹</h3>
+                <button type="button" onclick="this.closest('dialog').close()"
+                    class="text-slate-400 hover:text-slate-100 text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-800">×</button>
+            </div>
+
+            <div class="px-6 py-5 space-y-4 text-sm">
+
+                <div>
+                    <label for="g-id" class="block text-xs uppercase tracking-wider text-slate-500 mb-1">그룹 ID <span class="text-red-400">*</span></label>
+                    <input id="g-id" name="id" type="text" required pattern="[a-z][a-z0-9-]{2,31}"
+                        class="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 font-mono text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="예: support-tools">
+                    <p class="mt-1 text-xs text-slate-500">영문 소문자로 시작, 소문자/숫자/하이픈, 3~32자</p>
+                </div>
+
+                <div>
+                    <label for="g-name" class="block text-xs uppercase tracking-wider text-slate-500 mb-1">이름 <span class="text-red-400">*</span></label>
+                    <input id="g-name" name="name" type="text" required
+                        class="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="예: 지원 도구">
+                </div>
+
+                <div>
+                    <label for="g-desc" class="block text-xs uppercase tracking-wider text-slate-500 mb-1">설명</label>
+                    <textarea id="g-desc" name="description" rows="2"
+                        class="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="(선택)"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-slate-500 mb-2">SSO 기본 정책</label>
+                    <div class="space-y-2">
+                        <label class="flex items-start gap-2 cursor-pointer">
+                            <input type="radio" name="sso_default" value="ON" class="mt-1" checked>
+                            <span class="text-sm"><strong class="text-emerald-300">ON</strong> — 그룹 내 앱들 사이에 silent SSO 동작</span>
+                        </label>
+                        <label class="flex items-start gap-2 cursor-pointer">
+                            <input type="radio" name="sso_default" value="OFF" class="mt-1">
+                            <span class="text-sm"><strong class="text-amber-300">OFF</strong> — 그룹 내라도 매번 로그인 필요</span>
+                        </label>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="flex gap-2 px-6 py-4 border-t border-slate-800">
+                <button type="button" onclick="this.closest('dialog').close()"
+                    class="flex-1 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 px-4 py-2 text-sm">취소</button>
+                <button type="submit"
+                    class="flex-[2] rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 text-sm transition-colors">등록</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script>
+    // ─────── client 행 클릭 → 모달 열기 ───────
+    document.querySelectorAll('[data-client]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.client;
+            const dlg = document.getElementById(id);
+            if (dlg) dlg.showModal();
+        });
+    });
+
+    // ─────── 그룹 행 클릭 → 그룹 모달 열기 ───────
+    document.querySelectorAll('[data-group-row]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const gid = btn.dataset.groupId;
+            const dlg = document.getElementById('g-' + gid);
+            if (dlg) dlg.showModal();
+        });
+    });
+
+    // ─────── 그룹 SSO 토글 → API + DOM 즉시 반영 ───────
+    document.querySelectorAll('[data-sso-toggle]').forEach(group => {
+        const gid = group.dataset.ssoToggle;
+        const buttons = group.querySelectorAll('[data-sso-set]');
+        const saved = group.parentElement.querySelector('[data-sso-saved]');
+        const errEl = group.parentElement.querySelector('[data-sso-error]');
+
+        buttons.forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const value = btn.dataset.ssoSet;
+                errEl.classList.add('hidden');
+                saved.classList.add('hidden');
+
+                const body = new URLSearchParams({ sso_default: value });
+                let resp;
+                try {
+                    resp = await fetch(`/admin/groups/${encodeURIComponent(gid)}/policy`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: body.toString(),
+                    });
+                } catch (e) {
+                    errEl.textContent = '네트워크 오류: ' + e.message;
+                    errEl.classList.remove('hidden');
+                    return;
+                }
+                if (!resp.ok) {
+                    const data = await resp.json().catch(() => ({}));
+                    errEl.textContent = '실패: ' + (data.error || resp.status);
+                    errEl.classList.remove('hidden');
+                    return;
+                }
+
+                // 모달 안 버튼 스타일 갱신
+                buttons.forEach(b => {
+                    const active = b === btn;
+                    b.classList.toggle('bg-slate-800', !active);
+                    b.classList.toggle('border-slate-700', !active);
+                    b.classList.toggle('text-slate-400', !active);
+                    b.classList.toggle('hover:bg-slate-700', !active);
+
+                    if (active) {
+                        b.classList.remove('bg-slate-800', 'border-slate-700', 'text-slate-400', 'hover:bg-slate-700');
+                        if (value === 'ON') {
+                            b.classList.add('bg-emerald-600', 'border-emerald-500', 'text-white');
+                        } else {
+                            b.classList.add('bg-amber-600', 'border-amber-500', 'text-white');
+                        }
+                    } else {
+                        b.classList.remove('bg-emerald-600', 'border-emerald-500', 'bg-amber-600', 'border-amber-500', 'text-white');
+                    }
+                });
+
+                // 그룹 카드의 배지도 갱신
+                const badge = document.querySelector(`[data-sso-badge="${gid}"]`);
+                if (badge) {
+                    badge.textContent = 'SSO=' + value;
+                    badge.classList.remove('bg-emerald-950', 'text-emerald-300', 'border-emerald-900',
+                                            'bg-amber-950', 'text-amber-300', 'border-amber-900');
+                    if (value === 'ON') {
+                        badge.classList.add('bg-emerald-950', 'text-emerald-300', 'border-emerald-900');
+                    } else {
+                        badge.classList.add('bg-amber-950', 'text-amber-300', 'border-amber-900');
+                    }
+                }
+
+                saved.classList.remove('hidden');
+                setTimeout(() => saved.classList.add('hidden'), 2000);
+            });
+        });
+    });
+
+    // ─────── 모달 배경 클릭 → 닫기 (native <dialog> 보강) ───────
+    document.querySelectorAll('dialog').forEach(dlg => {
+        dlg.addEventListener('click', e => {
+            const r = dlg.getBoundingClientRect();
+            const inside = e.clientX >= r.left && e.clientX <= r.right
+                        && e.clientY >= r.top  && e.clientY <= r.bottom;
+            if (!inside) dlg.close();
+        });
+    });
+
+    // ─────── 그룹 필터 ───────
+    const bar = document.querySelector('[data-filter-bar]');
+    const rows = document.querySelectorAll('[data-client-row]');
+    const empty = document.querySelector('[data-empty]');
+
+    function applyFilter(value) {
+        let visible = 0;
+        rows.forEach(r => {
+            const match = value === 'all' || r.dataset.group === value;
+            r.classList.toggle('hidden', !match);
+            if (match) visible++;
+        });
+        empty.classList.toggle('hidden', visible > 0);
+
+        bar.querySelectorAll('[data-filter]').forEach(b => {
+            const active = b.dataset.filter === value;
+            b.classList.toggle('bg-blue-600', active);
+            b.classList.toggle('text-white', active);
+            b.classList.toggle('bg-slate-800', !active);
+            b.classList.toggle('text-slate-300', !active);
+            b.classList.toggle('hover:bg-slate-700', !active);
+        });
+    }
+    bar.querySelectorAll('[data-filter]').forEach(b => {
+        b.addEventListener('click', () => applyFilter(b.dataset.filter));
+    });
+
+    // ─────── 그룹별 카운트 채우기 ───────
+    const counts = {};
+    rows.forEach(r => {
+        const g = r.dataset.group;
+        counts[g] = (counts[g] || 0) + 1;
+    });
+    document.querySelectorAll('[data-count]').forEach(el => {
+        el.textContent = counts[el.dataset.count] || 0;
+    });
+    </script>
+</body>
+</html>

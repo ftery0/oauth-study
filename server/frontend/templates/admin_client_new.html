@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ouath · 새 서비스 등록</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-950 antialiased text-slate-100">
+
+    <header class="border-b border-slate-800">
+        <div class="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+            <h1 class="text-xl font-semibold tracking-tight">
+                <a href="/admin">ouath</a>
+            </h1>
+            <a href="/admin" class="text-sm text-slate-400 hover:text-slate-100">← 메인으로</a>
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-4 py-8">
+        <h2 class="text-2xl font-semibold mb-1">새 서비스 등록</h2>
+        <p class="text-sm text-slate-400 mb-6">등록 시 client_id 와 client_secret 이 자동 발급됩니다. secret 은 다음 페이지에서 <strong>한 번만</strong> 노출됩니다.</p>
+
+        {{if .ErrorMsg}}
+        <div class="mb-4 rounded-lg bg-red-950 border border-red-900 px-3 py-2 text-sm text-red-300" role="alert">
+            {{.ErrorMsg}}
+        </div>
+        {{end}}
+
+        <form action="/admin/clients" method="POST" class="space-y-5">
+
+            <div>
+                <label for="name" class="block text-sm font-medium text-slate-300 mb-1">서비스명 <span class="text-red-400">*</span></label>
+                <input id="name" name="name" type="text" required value="{{.Name}}"
+                       class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                       placeholder="예: Marketing Hub">
+            </div>
+
+            <div>
+                <label for="description" class="block text-sm font-medium text-slate-300 mb-1">설명</label>
+                <textarea id="description" name="description" rows="2"
+                          class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="(선택) 서비스 설명">{{.Description}}</textarea>
+            </div>
+
+            <div>
+                <label for="main_url" class="block text-sm font-medium text-slate-300 mb-1">메인 URL</label>
+                <input id="main_url" name="main_url" type="url" value="{{.MainURL}}"
+                       class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                       placeholder="https://app.example.com">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-1">서버 URL <span class="text-slate-500 text-xs">(여러 개 가능 · 배포 + 로컬 동시)</span></label>
+                <div data-url-list="server_urls" class="space-y-2">
+                    {{range .ServerURLs}}
+                    <div class="flex gap-2">
+                        <input name="server_urls" type="url" value="{{.}}"
+                               class="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               placeholder="https://app.example.com">
+                        <button type="button" data-remove class="px-3 rounded-lg border border-slate-700 text-slate-400 hover:bg-slate-800">×</button>
+                    </div>
+                    {{end}}
+                </div>
+                <button type="button" data-add="server_urls" class="mt-2 text-sm text-blue-400 hover:text-blue-300">+ URL 추가</button>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-1">리다이렉트 URL <span class="text-red-400">*</span> <span class="text-slate-500 text-xs">(최소 1 개)</span></label>
+                <div data-url-list="redirect_uris" class="space-y-2">
+                    {{range .RedirectURIs}}
+                    <div class="flex gap-2">
+                        <input name="redirect_uris" type="url" value="{{.}}"
+                               class="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               placeholder="https://app.example.com/callback">
+                        <button type="button" data-remove class="px-3 rounded-lg border border-slate-700 text-slate-400 hover:bg-slate-800">×</button>
+                    </div>
+                    {{end}}
+                </div>
+                <button type="button" data-add="redirect_uris" class="mt-2 text-sm text-blue-400 hover:text-blue-300">+ URL 추가</button>
+            </div>
+
+            <div>
+                <label for="group_id" class="block text-sm font-medium text-slate-300 mb-1">소속 그룹</label>
+                <select id="group_id" name="group_id"
+                        class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-base text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">(미소속 · silent SSO 영구 비활성)</option>
+                    {{range .Groups}}
+                    <option value="{{.ID}}" {{if eq .ID $.GroupID}}selected{{end}}>{{.Name}} ({{.ID}}, SSO={{.SSODefault}})</option>
+                    {{end}}
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-slate-300 mb-2">SSO override</label>
+                <div class="space-y-2 text-sm">
+                    {{$cur := .SSOOverride}}
+                    <label class="flex items-start gap-2"><input type="radio" name="sso_override" value="INHERIT" {{if eq $cur "INHERIT"}}checked{{end}} class="mt-1"><span><strong>INHERIT</strong> · 그룹 정책 따름 (기본)</span></label>
+                    <label class="flex items-start gap-2"><input type="radio" name="sso_override" value="FORCE_ON" {{if eq $cur "FORCE_ON"}}checked{{end}} class="mt-1"><span><strong>FORCE_ON</strong> · 그룹이 OFF 여도 silent 허용</span></label>
+                    <label class="flex items-start gap-2"><input type="radio" name="sso_override" value="FORCE_OFF" {{if eq $cur "FORCE_OFF"}}checked{{end}} class="mt-1"><span><strong>FORCE_OFF</strong> · 그룹이 ON 이어도 매번 로그인</span></label>
+                </div>
+            </div>
+
+            <div class="flex gap-3 pt-4 border-t border-slate-800">
+                <a href="/admin" class="flex-1 text-center rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 px-4 py-2.5">취소</a>
+                <button type="submit" class="flex-[2] rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium px-4 py-2.5 transition-colors">
+                    등록
+                </button>
+            </div>
+        </form>
+    </main>
+
+    <script>
+    // "+ URL 추가" / "×" 동작
+    document.querySelectorAll('[data-add]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const name = btn.getAttribute('data-add');
+            const list = document.querySelector(`[data-url-list="${name}"]`);
+            const wrap = document.createElement('div');
+            wrap.className = 'flex gap-2';
+            wrap.innerHTML = `
+                <input name="${name}" type="url" class="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-base text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://...">
+                <button type="button" data-remove class="px-3 rounded-lg border border-slate-700 text-slate-400 hover:bg-slate-800">×</button>
+            `;
+            list.appendChild(wrap);
+            attachRemove(wrap.querySelector('[data-remove]'));
+            wrap.querySelector('input').focus();
+        });
+    });
+    function attachRemove(btn) {
+        btn.addEventListener('click', () => btn.closest('.flex').remove());
+    }
+    document.querySelectorAll('[data-remove]').forEach(attachRemove);
+    </script>
+</body>
+</html>

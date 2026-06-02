@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"html/template"
@@ -9,7 +10,11 @@ import (
 	"net/http"
 
 	"github.com/ftery0/ouath/server/config"
+	"github.com/ftery0/ouath/server/db"
+	"github.com/ftery0/ouath/server/handlers"
 	"github.com/ftery0/ouath/server/router"
+	"github.com/ftery0/ouath/server/store"
+	pgstore "github.com/ftery0/ouath/server/store/postgres"
 	"github.com/ftery0/ouath/server/token"
 )
 
@@ -22,6 +27,37 @@ var frontendFS embed.FS
 func main() {
 	cfg := config.Load()
 	token.Init(cfg.JWTSecret, cfg.Issuer)
+	handlers.IdPCookieInit(cfg.IdPSessionSecret)
+	handlers.AdminInit(cfg.AdminPasswordHash, cfg.AdminSessionSecret)
+	handlers.SetProduction(cfg.Env == "production")
+	store.IdPSessions.StartCleanup()
+
+	// Postgres 연결 + 마이그레이션 + store 교체 + 시드.
+	if cfg.DatabaseURL != "" {
+		ctx := context.Background()
+		if err := db.Connect(ctx, cfg.DatabaseURL); err != nil {
+			if cfg.Env == "production" {
+				log.Fatal("DB 연결 실패: ", err)
+			}
+			log.Println("[dev] DB 연결 실패, 인메모리로 계속:", err)
+		} else {
+			if err := db.RunMigrations(ctx); err != nil {
+				log.Fatal("migration 실패: ", err)
+			}
+			pgGroups := pgstore.NewGroupStore(db.Pool)
+			pgClients := pgstore.NewClientStore(db.Pool)
+			// 시드 (이미 있으면 ON CONFLICT DO NOTHING)
+			if err := store.SeedGroups(pgGroups); err != nil {
+				log.Fatal("seed groups: ", err)
+			}
+			if err := store.SeedClients(pgClients); err != nil {
+				log.Fatal("seed clients: ", err)
+			}
+			store.Groups = pgGroups
+			store.Clients = pgClients
+			log.Println("Postgres 연결 + 시드 OK · store=postgres")
+		}
+	}
 
 	// 템플릿 파싱: embed된 FS에서 templates/*.html 파일을 모두 읽어서 파싱
 	tmpl, err := template.ParseFS(frontendFS, "frontend/templates/*.html")
