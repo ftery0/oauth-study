@@ -10,8 +10,13 @@ import (
 	"github.com/ftery0/ouath/server/models"
 )
 
+// defaultMemoryClients: 인메모리 기본 인스턴스. main 이 DATABASE_URL 보고
+// Clients 를 Postgres 구현체로 교체할 수 있다. 시드 init() 은 이 인스턴스에만
+// 적용되므로, Postgres 사용 시 별도 SeedIfEmpty 가 필요.
 var (
-	Clients     = &clientStore{byID: make(map[string]*models.Client)}
+	defaultMemoryClients = &clientStore{byID: make(map[string]*models.Client)}
+	// Clients: 외부 노출. main 에서 교체 가능.
+	Clients     ClientStore = defaultMemoryClients
 	clientMutex sync.RWMutex
 )
 
@@ -20,13 +25,27 @@ type clientStore struct {
 }
 
 func init() {
-	// 학습/데모용 시드 client. 추후 phase 의 어드민 콘솔이 등록 UI 로 대체한다.
-	// 이번 phase 의 핵심 시연은 다음 매핑:
-	//   - app1, app2 ∈ group-a (SSO ON) → 같은 그룹 silent SSO 시연
-	//   - app3       ∈ group-b (SSO OFF) → 다른 그룹은 다시 로그인 (Realm 경계)
-	Clients.register(seedClient("app1", "App 1", "group-a", 8011, 5181))
-	Clients.register(seedClient("app2", "App 2", "group-a", 8012, 5182))
-	Clients.register(seedClient("app3", "App 3", "group-b", 8013, 5183))
+	// 학습/데모용 시드 client. 인메모리 인스턴스에만 자동 적용.
+	// Postgres 사용 시 main 에서 SeedClients 를 명시적으로 호출.
+	defaultMemoryClients.register(seedClient("app1", "App 1", "group-a", 8011, 5181))
+	defaultMemoryClients.register(seedClient("app2", "App 2", "group-a", 8012, 5182))
+	defaultMemoryClients.register(seedClient("app3", "App 3", "group-b", 8013, 5183))
+}
+
+// SeedClients: 시드 client 들을 임의의 ClientStore 에 등록한다 (Postgres SeedIfEmpty 용).
+// 같은 client_id 가 이미 있으면 무시 (Register 가 ON CONFLICT DO NOTHING).
+func SeedClients(s ClientStore) error {
+	seeds := []*models.Client{
+		seedClient("app1", "App 1", "group-a", 8011, 5181),
+		seedClient("app2", "App 2", "group-a", 8012, 5182),
+		seedClient("app3", "App 3", "group-b", 8013, 5183),
+	}
+	for _, c := range seeds {
+		if err := s.Register(c); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // seedClient: 학습용 헬퍼. ClientSecret 도 식별 가능한 형태로 고정한다
@@ -46,6 +65,17 @@ func seedClient(id, name, groupID string, backendPort, frontendPort int) *models
 		GroupID:      groupID,
 		SSOOverride:  models.OverrideInherit,
 	}
+}
+
+// All: 모든 client 슬라이스로 반환 (어드민 read 용도).
+func (s *clientStore) All() []*models.Client {
+	clientMutex.RLock()
+	defer clientMutex.RUnlock()
+	out := make([]*models.Client, 0, len(s.byID))
+	for _, c := range s.byID {
+		out = append(out, c)
+	}
+	return out
 }
 
 // GetByClientID: client_id 로 클라이언트 조회
