@@ -1,0 +1,26 @@
+# DAuth 학습용 인프라
+# 기동: docker compose up -d
+# 종료: docker compose down
+# 데이터 초기화: docker compose down -v
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: dauth-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dauth
+      POSTGRES_USER: dauth
+      POSTGRES_PASSWORD: dauth-dev
+    ports:
+      # 호스트 5433 → 컨테이너 5432 (사용자 머신의 다른 Postgres 와 충돌 회피)
+      - "5433:5432"
+    volumes:
+      - dauth-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dauth -d dauth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  dauth-postgres:
