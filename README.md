@@ -1,12 +1,5 @@
-# oauth-study — DAuth 스타일 SSO 학습 프로젝트
+# oauth-study — oAuth 스타일 SSO 학습 프로젝트
 
-> Keycloak 의 Realm 같은 **그룹 단위 SSO 경계** 를 Go 로 직접 만들어 보고,
-> 서로 다른 스택의 클라이언트 앱 3 개로 silent SSO 가 진짜 동작하는지 시연하는
-> 학습 + 점진적 실사용 프로젝트.
-
-전체 로드맵은 [`docs/master-plan.md`](docs/master-plan.md) 참고.
-
----
 
 ## 무엇이 들어 있나
 
@@ -216,21 +209,3 @@ cd server && go test ./...
 ```
 
 ---
-
-## 학습 한계 (다음 phase 에서)
-
-이번 phase 는 silent SSO **메커니즘** 학습/검증이 목표. 따라서 다음은 의도적으로 빠져 있다:
-
-- ❌ 어드민 UI · client 등록 · DB 영속화 → **Phase 2**
-- ❌ 사용자 + 그룹 단위 속성 시스템 → **Phase 3**
-- ❌ Single Logout · ID Token · PKCE → 그 이후
-- ❌ 회원가입 / 비밀번호 찾기 (단일 비밀번호 게이트로 대체 결정)
-- ❌ 보안 강화 추가 (Rate limit, audit log 등)
-
-상세는 [docs/master-plan.md](docs/master-plan.md).
-
----
-
-## 라이선스
-
-학습 프로젝트.
