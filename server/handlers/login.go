@@ -22,11 +22,18 @@ func LoginHandler(tmpl *template.Template) http.HandlerFunc {
 		redirectURI := r.FormValue("redirect_uri")
 		scope := r.FormValue("scope")
 
+		// 다중 사용자 lookup. 미존재 ID 도 동일 cost 의 bcrypt 를 수행해
+		// timing attack 으로 사용자 enumeration 이 불가능하도록 한다.
+		user, ok := models.TestUsers[id]
+		hashToCompare := models.DummyPasswordHash
+		if ok {
+			hashToCompare = user.PasswordHash
+		}
 		err := bcrypt.CompareHashAndPassword(
-			[]byte(models.TestUser.PasswordHash),
+			[]byte(hashToCompare),
 			[]byte(password),
 		)
-		if id != models.TestUser.ID || err != nil {
+		if !ok || err != nil {
 			tmpl.ExecuteTemplate(w, "login.html", loginPageData{
 				ClientName:  clientID,
 				State:       state,
