@@ -6,3 +6,5 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	golang.org/x/crypto v0.31.0
 )
+
+require github.com/gorilla/securecookie v1.1.2 // indirect

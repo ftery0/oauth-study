@@ -9,7 +9,9 @@ import (
 	"net/http"
 
 	"github.com/ftery0/ouath/server/config"
+	"github.com/ftery0/ouath/server/handlers"
 	"github.com/ftery0/ouath/server/router"
+	"github.com/ftery0/ouath/server/store"
 	"github.com/ftery0/ouath/server/token"
 )
 
@@ -22,6 +24,8 @@ var frontendFS embed.FS
 func main() {
 	cfg := config.Load()
 	token.Init(cfg.JWTSecret, cfg.Issuer)
+	handlers.IdPCookieInit(cfg.IdPSessionSecret)
+	store.IdPSessions.StartCleanup()
 
 	// 템플릿 파싱: embed된 FS에서 templates/*.html 파일을 모두 읽어서 파싱
 	tmpl, err := template.ParseFS(frontendFS, "frontend/templates/*.html")
