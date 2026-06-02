@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: app1-backend
+
+server:
+  port: ${PORT:8011}
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+
+oauth:
+  server-url: ${OAUTH_SERVER_URL:http://localhost:8080}
+  client-id: ${OAUTH_CLIENT_ID:app1}
+  client-secret: ${OAUTH_CLIENT_SECRET:app1-secret}
+  redirect-uri: ${OAUTH_REDIRECT_URI:http://localhost:8011/callback}
+
+frontend:
+  url: ${FRONTEND_URL:http://localhost:5181}
+
+logging:
+  level:
+    root: INFO
+    com.example.app1: DEBUG
