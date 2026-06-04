@@ -46,15 +46,20 @@ func main() {
 			}
 			pgGroups := pgstore.NewGroupStore(db.Pool)
 			pgClients := pgstore.NewClientStore(db.Pool)
-			// 시드 (이미 있으면 ON CONFLICT DO NOTHING)
+			pgUsers := pgstore.NewUserStore(db.Pool)
+			// 시드 (이미 있으면 ON CONFLICT DO NOTHING / ErrUserAlreadyExists 흡수)
 			if err := store.SeedGroups(pgGroups); err != nil {
 				log.Fatal("seed groups: ", err)
 			}
 			if err := store.SeedClients(pgClients); err != nil {
 				log.Fatal("seed clients: ", err)
 			}
+			if err := store.SeedUsers(ctx, pgUsers); err != nil {
+				log.Fatal("seed users: ", err)
+			}
 			store.Groups = pgGroups
 			store.Clients = pgClients
+			store.Users = pgUsers
 			log.Println("Postgres 연결 + 시드 OK · store=postgres")
 		}
 	}
