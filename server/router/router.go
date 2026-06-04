@@ -31,6 +31,8 @@ func New(tmpl *template.Template) *http.ServeMux {
 	mux.Handle("GET /admin", handlers.RequireAdminAuth(handlers.AdminMainHandler(tmpl)))
 	mux.Handle("GET /admin/clients/new", handlers.RequireAdminAuth(handlers.AdminClientNewFormHandler(tmpl)))
 	mux.Handle("POST /admin/clients", handlers.RequireAdminAuth(handlers.AdminClientCreateHandler(tmpl)))
+	mux.Handle("POST /admin/clients/{id}/silent-sso", handlers.RequireAdminAuth(http.HandlerFunc(handlers.AdminClientSilentSSOHandler)))
+	// Phase-R: 그룹 라우트는 R-7 cleanup 에서 제거. 일단 유지 (호출 안 됨).
 	mux.Handle("POST /admin/groups", handlers.RequireAdminAuth(http.HandlerFunc(handlers.AdminGroupCreateHandler)))
 	mux.Handle("POST /admin/groups/{id}/policy", handlers.RequireAdminAuth(http.HandlerFunc(handlers.AdminGroupPolicyHandler)))
 

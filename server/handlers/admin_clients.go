@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"html/template"
 	"net/http"
 	"strings"
@@ -12,17 +13,15 @@ import (
 )
 
 // adminClientNewPageData: 신규 등록 폼에 넘기는 데이터.
+// Phase-R: 그룹/override 제거. silent_sso 토글 기본값 true.
 type adminClientNewPageData struct {
-	Groups   []*models.ProjectGroup
-	ErrorMsg string
-	// 에러 발생 시 사용자가 입력한 값 보존
+	ErrorMsg     string
 	Name         string
 	Description  string
 	MainURL      string
 	ServerURLs   []string
 	RedirectURIs []string
-	GroupID      string
-	SSOOverride  string
+	SilentSSO    bool
 }
 
 // adminClientCreatedPageData: 등록 성공 후 secret 1회 노출 페이지.
@@ -34,10 +33,9 @@ type adminClientCreatedPageData struct {
 func AdminClientNewFormHandler(tmpl *template.Template) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		data := adminClientNewPageData{
-			Groups:       store.Groups.All(),
-			SSOOverride:  string(models.OverrideInherit),
 			RedirectURIs: []string{""},
 			ServerURLs:   []string{""},
+			SilentSSO:    true,
 		}
 		tmpl.ExecuteTemplate(w, "admin_client_new.html", data)
 	}
@@ -54,27 +52,19 @@ func AdminClientCreateHandler(tmpl *template.Template) http.HandlerFunc {
 		name := strings.TrimSpace(r.FormValue("name"))
 		description := strings.TrimSpace(r.FormValue("description"))
 		mainURL := strings.TrimSpace(r.FormValue("main_url"))
-		groupID := r.FormValue("group_id")
-		override := r.FormValue("sso_override")
-		if override == "" {
-			override = string(models.OverrideInherit)
-		}
+		silentSSO := r.FormValue("silent_sso") == "true"
 
-		// 배열 필드 — 빈 줄 제거
 		redirectURIs := cleanList(r.Form["redirect_uris"])
 		serverURLs := cleanList(r.Form["server_urls"])
 
-		// 입력 검증
 		if name == "" || len(redirectURIs) == 0 {
 			data := adminClientNewPageData{
-				Groups:       store.Groups.All(),
 				Name:         name,
 				Description:  description,
 				MainURL:      mainURL,
 				ServerURLs:   r.Form["server_urls"],
 				RedirectURIs: r.Form["redirect_uris"],
-				GroupID:      groupID,
-				SSOOverride:  override,
+				SilentSSO:    silentSSO,
 				ErrorMsg:     "서비스명과 리다이렉트 URL 최소 1 개는 필수입니다",
 			}
 			if len(data.RedirectURIs) == 0 {
@@ -87,7 +77,6 @@ func AdminClientCreateHandler(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		// client_id / client_secret 자동 발급
 		clientID := "client-" + randomShort(8)
 		clientSecret := randomShort(32)
 
@@ -100,8 +89,7 @@ func AdminClientCreateHandler(tmpl *template.Template) http.HandlerFunc {
 			ServerURLs:   serverURLs,
 			RedirectURIs: redirectURIs,
 			OwnerID:      "",
-			GroupID:      groupID,
-			SSOOverride:  models.AppSSOOverride(override),
+			SilentSSO:    silentSSO,
 		}
 
 		if err := store.Clients.Register(c); err != nil {
@@ -109,11 +97,45 @@ func AdminClientCreateHandler(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		// secret 은 이 순간 한 번만 노출 — 이후 다시 못 봄
 		tmpl.ExecuteTemplate(w, "admin_client_created.html", adminClientCreatedPageData{
 			Client: c,
 		})
 	}
+}
+
+// AdminClientSilentSSOHandler: POST /admin/clients/{id}/silent-sso
+// form: silent_sso=true|false
+// JSON 응답.
+func AdminClientSilentSSOHandler(w http.ResponseWriter, r *http.Request) {
+	clientID := r.PathValue("id")
+	if clientID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "id required"})
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "form parse failed"})
+		return
+	}
+	val := r.FormValue("silent_sso")
+	if val != "true" && val != "false" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid silent_sso (must be 'true' or 'false')"})
+		return
+	}
+	silentSSO := val == "true"
+
+	if err := store.Clients.UpdateSilentSSO(clientID, silentSSO); err != nil {
+		status := http.StatusNotFound
+		if !errors.Is(err, errors.New("client not found")) {
+			// 그냥 404 로 — 호출자가 ID 잘못 줬을 가능성이 큼
+		}
+		writeJSON(w, status, map[string]any{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"client_id":  clientID,
+		"silent_sso": silentSSO,
+	})
 }
 
 // cleanList: 빈 줄 / 공백만인 줄 제거.
