@@ -58,11 +58,11 @@ func Load() Config {
 
 	jwtSecret := requireSecret(env, "OAUTH_JWT_SECRET", devDefaultJWTSecret)
 	idpSessionSecret := requireSecret(env, "IDP_SESSION_SECRET", devDefaultIdPSessionSecret)
-	adminSessionSecret := requireSecret(env, "DAUTH_ADMIN_SESSION_SECRET", devDefaultAdminSessionSecret)
-	adminPasswordHash := requireSecret(env, "DAUTH_ADMIN_PASSWORD_HASH", devDefaultAdminPasswordHash)
+	adminSessionSecret := requireSecret(env, "OAUTH_ADMIN_SESSION_SECRET", devDefaultAdminSessionSecret)
+	adminPasswordHash := requireSecret(env, "OAUTH_ADMIN_PASSWORD_HASH", devDefaultAdminPasswordHash)
 
 	// DATABASE_URL: 비어있으면 DB 연결 안 함 (P2-B 학습 호환).
-	// 권장 형식: postgres://dauth:dauth-dev@localhost:5433/dauth?sslmode=disable
+	// 권장 형식: postgres://oauth:oauth-dev@localhost:5433/oauth?sslmode=disable
 	databaseURL := os.Getenv("DATABASE_URL")
 
 	return Config{

@@ -1,4 +1,4 @@
-// hashgen: DAuth 어드민 비밀번호의 bcrypt hash 를 생성하는 일회용 도구.
+// hashgen: OAuth 어드민 비밀번호의 bcrypt hash 를 생성하는 일회용 도구.
 // 사용: go run ./cmd/hashgen <password>
 package main
 
