@@ -1,5 +1,7 @@
 package com.example.app1;
 
+import com.example.app1.domain.User;
+import com.example.app1.domain.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -17,17 +19,15 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
 
-/**
- * OAuth Authorization Code Flow 클라이언트.
- * 백엔드 세션 패턴: 토큰을 HttpSession 에 저장, 브라우저에는 세션 ID 쿠키만 전달.
- */
 @RestController
 public class OAuthController {
 
     @Value("${oauth.server-url}") private String oauthServerUrl;
+    @Value("${oauth.internal-url}") private String oauthInternalUrl;
     @Value("${oauth.client-id}") private String clientId;
     @Value("${oauth.client-secret}") private String clientSecret;
     @Value("${oauth.redirect-uri}") private String redirectUri;
@@ -36,10 +36,12 @@ public class OAuthController {
     private final HttpClient http = HttpClient.newHttpClient();
     private final ObjectMapper json = new ObjectMapper();
     private final SecureRandom random = new SecureRandom();
+    private final UserRepository users;
 
-    // ──────────────────────────────────────────
-    // GET /login
-    // ──────────────────────────────────────────
+    public OAuthController(UserRepository users) {
+        this.users = users;
+    }
+
     @GetMapping("/login")
     public void login(HttpServletRequest req, HttpServletResponse res) throws IOException {
         String state = randomHex(16);
@@ -55,9 +57,6 @@ public class OAuthController {
         res.sendRedirect(authorizeUrl);
     }
 
-    // ──────────────────────────────────────────
-    // GET /callback
-    // ──────────────────────────────────────────
     @GetMapping("/callback")
     public void callback(@RequestParam(required = false) String code,
                          @RequestParam(required = false) String state,
@@ -84,15 +83,20 @@ public class OAuthController {
             return;
         }
 
-        session.setAttribute("accessToken", (String) tokens.get("access_token"));
+        String accessToken = (String) tokens.get("access_token");
+        session.setAttribute("accessToken", accessToken);
         session.setAttribute("refreshToken", (String) tokens.get("refresh_token"));
+
+        // 자동 프로비저닝: IdP userinfo → 내부 user 행 upsert + session 에 sub 박음
+        Map<String, Object> userInfo = fetchUserInfo(accessToken);
+        if (userInfo != null && userInfo.get("sub") instanceof String sub) {
+            users.findById(sub).orElseGet(() -> users.save(new User(sub, sub, null)));
+            session.setAttribute("userSub", sub);
+        }
 
         res.sendRedirect(frontendUrl);
     }
 
-    // ──────────────────────────────────────────
-    // GET /api/me — access token 만료 시 refresh
-    // ──────────────────────────────────────────
     @GetMapping("/api/me")
     public ResponseEntity<?> me(HttpServletRequest req) throws IOException, InterruptedException {
         HttpSession session = req.getSession(false);
@@ -104,7 +108,6 @@ public class OAuthController {
         Map<String, Object> userInfo = fetchUserInfo(accessToken);
 
         if (userInfo == null) {
-            // access token 만료 → refresh
             if (!refreshAccessToken(session)) {
                 session.invalidate();
                 return ResponseEntity.status(401).body(Map.of("error", "Session expired"));
@@ -116,12 +119,16 @@ public class OAuthController {
         if (userInfo == null) {
             return ResponseEntity.status(500).body(Map.of("error", "Failed to fetch user info"));
         }
-        return ResponseEntity.ok(userInfo);
+
+        // 응답에 내부 displayName 동봉 (없으면 sub 그대로)
+        Map<String, Object> body = new HashMap<>(userInfo);
+        if (userInfo.get("sub") instanceof String sub) {
+            users.findById(sub).ifPresent(u -> body.put("display_name", u.getDisplayName()));
+            session.setAttribute("userSub", sub);
+        }
+        return ResponseEntity.ok(body);
     }
 
-    // ──────────────────────────────────────────
-    // POST /api/logout
-    // ──────────────────────────────────────────
     @PostMapping("/api/logout")
     public Map<String, Boolean> logout(HttpServletRequest req) {
         HttpSession session = req.getSession(false);
@@ -131,17 +138,13 @@ public class OAuthController {
         return Map.of("ok", true);
     }
 
-    // ──────────────────────────────────────────
-    // 헬퍼
-    // ──────────────────────────────────────────
-
     private Map<String, Object> exchangeToken(String code) throws IOException, InterruptedException {
         String body = "grant_type=authorization_code"
                 + "&code=" + urlEncode(code)
                 + "&redirect_uri=" + urlEncode(redirectUri);
 
         HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(oauthServerUrl + "/oauth/token"))
+                .uri(URI.create(oauthInternalUrl + "/oauth/token"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .header("Authorization", "Basic " + basicAuth(clientId, clientSecret))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
@@ -160,7 +163,7 @@ public class OAuthController {
                 + "&refresh_token=" + urlEncode(refreshToken);
 
         HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(oauthServerUrl + "/oauth/token"))
+                .uri(URI.create(oauthInternalUrl + "/oauth/token"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .header("Authorization", "Basic " + basicAuth(clientId, clientSecret))
                 .POST(HttpRequest.BodyPublishers.ofString(body))
@@ -170,7 +173,6 @@ public class OAuthController {
         if (resp.statusCode() != 200) return false;
         Map<String, Object> tokens = parseJson(resp.body());
 
-        // Token Rotation: 갱신마다 새 refresh token 저장
         session.setAttribute("accessToken", (String) tokens.get("access_token"));
         session.setAttribute("refreshToken", (String) tokens.get("refresh_token"));
         return true;
@@ -178,7 +180,7 @@ public class OAuthController {
 
     private Map<String, Object> fetchUserInfo(String accessToken) throws IOException, InterruptedException {
         HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(oauthServerUrl + "/oauth/userinfo"))
+                .uri(URI.create(oauthInternalUrl + "/oauth/userinfo"))
                 .header("Authorization", "Bearer " + accessToken)
                 .GET()
                 .build();
@@ -197,14 +199,10 @@ public class OAuthController {
         }
     }
 
-    private String urlEncode(String s) {
-        return URLEncoder.encode(s, StandardCharsets.UTF_8);
-    }
-
+    private String urlEncode(String s) { return URLEncoder.encode(s, StandardCharsets.UTF_8); }
     private String basicAuth(String user, String pass) {
         return Base64.getEncoder().encodeToString((user + ":" + pass).getBytes(StandardCharsets.UTF_8));
     }
-
     private String randomHex(int byteLen) {
         byte[] b = new byte[byteLen];
         random.nextBytes(b);
