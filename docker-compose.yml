@@ -1,8 +1,22 @@
-# DAuth 학습용 인프라
-# 기동: docker compose up -d
+# DAuth 학습용 인프라 + 3 앱 풀스택 컨테이너
+# 빠른 기동: docker compose up -d
 # 종료: docker compose down
 # 데이터 초기화: docker compose down -v
+#
+# 컨테이너 구성 (총 11 개):
+#   postgres        — IdP 의 Postgres (호스트 5433)
+#   dauth-idp       — IdP / DAuth 서버 (호스트 8080)
+#   app1-mariadb    — Notebook 의 MariaDB (호스트 3307)
+#   app1-backend    — Notebook Spring (호스트 8011)
+#   app1-frontend   — Notebook React + nginx (호스트 5181)
+#   app2-mongo      — TaskBoard 의 MongoDB (호스트 27018)
+#   app2-backend    — TaskBoard Node TS (호스트 8012)
+#   app2-frontend   — TaskBoard Vue + nginx (호스트 5182)
+#   app3-postgres   — HelpDesk 의 PostgreSQL (호스트 5434)
+#   app3-backend    — HelpDesk FastAPI (호스트 8013)
+#   app3-frontend   — HelpDesk Next standalone (호스트 5183)
 services:
+  # ─────────── IdP 인프라 ───────────
   postgres:
     image: postgres:17-alpine
     container_name: dauth-postgres
@@ -12,7 +26,6 @@ services:
       POSTGRES_USER: dauth
       POSTGRES_PASSWORD: dauth-dev
     ports:
-      # 호스트 5433 → 컨테이너 5432 (사용자 머신의 다른 Postgres 와 충돌 회피)
       - "5433:5432"
     volumes:
       - dauth-postgres:/var/lib/postgresql/data
@@ -22,5 +35,197 @@ services:
       timeout: 5s
       retries: 5
 
+  dauth-idp:
+    build:
+      context: ./server
+    container_name: dauth-idp
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      OAUTH_PORT: "8080"
+      OAUTH_ISSUER: "http://localhost:8080"
+      DATABASE_URL: "postgres://dauth:dauth-dev@postgres:5432/dauth?sslmode=disable"
+    ports:
+      - "8080:8080"
+
+  # ─────────── app1 Notebook ───────────
+  app1-mariadb:
+    image: mariadb:11
+    container_name: app1-mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: app1_notebook
+      MARIADB_USER: app1
+      MARIADB_PASSWORD: app1-dev
+      MARIADB_ROOT_PASSWORD: app1-root-dev
+    ports:
+      - "3307:3306"
+    volumes:
+      - app1-mariadb:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app1-backend:
+    build:
+      context: ./examples/app1/backend
+    container_name: app1-backend
+    restart: unless-stopped
+    depends_on:
+      app1-mariadb:
+        condition: service_healthy
+      dauth-idp:
+        condition: service_started
+    environment:
+      PORT: "8011"
+      OAUTH_SERVER_URL: "http://localhost:8080"
+      OAUTH_INTERNAL_URL: "http://dauth-idp:8080"
+      OAUTH_CLIENT_ID: app1
+      OAUTH_CLIENT_SECRET: app1-secret
+      OAUTH_REDIRECT_URI: "http://localhost:8011/callback"
+      FRONTEND_URL: "http://localhost:5181"
+      SESSION_SECRET: app1-backend-docker-session-secret-not-for-prod
+      DB_URL: "jdbc:mariadb://app1-mariadb:3306/app1_notebook"
+      DB_USERNAME: app1
+      DB_PASSWORD: app1-dev
+    ports:
+      - "8011:8011"
+
+  app1-frontend:
+    build:
+      context: ./examples/app1/frontend
+    container_name: app1-frontend
+    restart: unless-stopped
+    depends_on:
+      - app1-backend
+    ports:
+      - "5181:5181"
+
+  # ─────────── app2 TaskBoard ───────────
+  app2-mongo:
+    image: mongo:7
+    container_name: app2-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: app2
+      MONGO_INITDB_ROOT_PASSWORD: app2-dev
+      MONGO_INITDB_DATABASE: app2_taskboard
+    ports:
+      - "27018:27017"
+    volumes:
+      - app2-mongo:/data/db
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - -u
+        - app2
+        - -p
+        - app2-dev
+        - --authenticationDatabase
+        - admin
+        - --eval
+        - db.adminCommand('ping').ok
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app2-backend:
+    build:
+      context: ./examples/app2/backend
+    container_name: app2-backend
+    restart: unless-stopped
+    depends_on:
+      app2-mongo:
+        condition: service_healthy
+      dauth-idp:
+        condition: service_started
+    environment:
+      PORT: "8012"
+      OAUTH_SERVER_URL: "http://localhost:8080"
+      OAUTH_INTERNAL_URL: "http://dauth-idp:8080"
+      OAUTH_CLIENT_ID: app2
+      OAUTH_CLIENT_SECRET: app2-secret
+      OAUTH_REDIRECT_URI: "http://localhost:8012/callback"
+      FRONTEND_URL: "http://localhost:5182"
+      SESSION_SECRET: app2-backend-docker-session-secret-not-for-prod
+      MONGO_URL: "mongodb://app2:app2-dev@app2-mongo:27017/app2_taskboard?authSource=admin"
+    ports:
+      - "8012:8012"
+
+  app2-frontend:
+    build:
+      context: ./examples/app2/frontend
+    container_name: app2-frontend
+    restart: unless-stopped
+    depends_on:
+      - app2-backend
+    ports:
+      - "5182:5182"
+
+  # ─────────── app3 HelpDesk ───────────
+  app3-postgres:
+    image: postgres:17-alpine
+    container_name: app3-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: app3_helpdesk
+      POSTGRES_USER: app3
+      POSTGRES_PASSWORD: app3-dev
+    ports:
+      - "5434:5432"
+    volumes:
+      - app3-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app3 -d app3_helpdesk"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app3-backend:
+    build:
+      context: ./examples/app3/backend
+    container_name: app3-backend
+    restart: unless-stopped
+    depends_on:
+      app3-postgres:
+        condition: service_healthy
+      dauth-idp:
+        condition: service_started
+    environment:
+      PORT: "8013"
+      HOST: "0.0.0.0"
+      OAUTH_SERVER_URL: "http://localhost:8080"
+      OAUTH_INTERNAL_URL: "http://dauth-idp:8080"
+      OAUTH_CLIENT_ID: app3
+      OAUTH_CLIENT_SECRET: app3-secret
+      OAUTH_REDIRECT_URI: "http://localhost:8013/callback"
+      FRONTEND_URL: "http://localhost:5183"
+      SESSION_SECRET: app3-backend-docker-session-secret-not-for-prod
+      DATABASE_URL: "postgresql+asyncpg://app3:app3-dev@app3-postgres:5432/app3_helpdesk"
+    ports:
+      - "8013:8013"
+
+  app3-frontend:
+    build:
+      context: ./examples/app3/frontend
+      args:
+        BACKEND_URL: http://app3-backend:8013
+    container_name: app3-frontend
+    restart: unless-stopped
+    depends_on:
+      - app3-backend
+    ports:
+      - "5183:5183"
+
 volumes:
   dauth-postgres:
+  app1-mariadb:
+  app2-mongo:
+  app3-postgres:
