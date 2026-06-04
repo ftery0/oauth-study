@@ -1,6 +1,19 @@
 spring:
   application:
     name: app1-backend
+  datasource:
+    url: ${DB_URL:jdbc:mariadb://localhost:3307/app1_notebook}
+    username: ${DB_USERNAME:app1}
+    password: ${DB_PASSWORD:app1-dev}
+    driver-class-name: org.mariadb.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MariaDBDialect
+        format_sql: true
 
 server:
   port: ${PORT:8011}
@@ -11,7 +24,10 @@ server:
         same-site: lax
 
 oauth:
+  # 브라우저 redirect 용 (사용자가 접근하는 IdP URL)
   server-url: ${OAUTH_SERVER_URL:http://localhost:8080}
+  # 백엔드 token/userinfo 호출 용 (compose 안에서는 컨테이너 hostname)
+  internal-url: ${OAUTH_INTERNAL_URL:${OAUTH_SERVER_URL:http://localhost:8080}}
   client-id: ${OAUTH_CLIENT_ID:app1}
   client-secret: ${OAUTH_CLIENT_SECRET:app1-secret}
   redirect-uri: ${OAUTH_REDIRECT_URI:http://localhost:8011/callback}
