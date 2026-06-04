@@ -10,24 +10,36 @@ export default function Page() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const e = params.get('error')
+    const loggedOut = params.get('logout')
     if (e) {
       setErrorMsg(e)
       window.history.replaceState({}, '', '/')
     }
+    if (loggedOut) {
+      window.history.replaceState({}, '', '/')
+      setLoading(false)
+      return
+    }
 
-    // App Router 의 fetch 캐싱 회피
     fetch('/api/me', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data) setUser(data)
-        setLoading(false)
+        if (data) {
+          setUser(data)
+          setLoading(false)
+        } else if (e) {
+          setLoading(false)
+        } else {
+          // Keycloak 패턴: 401 + 에러 없음 → 즉시 OAuth 시작
+          window.location.href = '/login'
+        }
       })
       .catch(() => setLoading(false))
   }, [])
 
   const logout = async () => {
     await fetch('/api/logout', { method: 'POST', cache: 'no-store' })
-    setUser(null)
+    window.location.href = '/?logout=1'
   }
 
   if (loading) {

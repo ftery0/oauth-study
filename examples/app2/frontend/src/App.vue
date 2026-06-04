@@ -6,27 +6,41 @@ const loading = ref(true)
 const errorMsg = ref(null)
 
 onMounted(async () => {
-  // URL ?error=... 처리 (OAuth 서버가 에러 리턴한 경우)
   const params = new URLSearchParams(window.location.search)
   const e = params.get('error')
+  const loggedOut = params.get('logout')
   if (e) {
     errorMsg.value = e
     window.history.replaceState({}, '', '/')
   }
+  if (loggedOut) {
+    // 로그아웃 직후 자동 재로그인 루프 방지
+    window.history.replaceState({}, '', '/')
+    loading.value = false
+    return
+  }
 
-  // 이미 로그인 상태인지 확인
   try {
     const r = await fetch('/api/me')
     if (r.ok) {
       user.value = await r.json()
+      loading.value = false
+      return
     }
-  } catch {}
-  loading.value = false
+    if (e) {
+      loading.value = false
+      return
+    }
+    // Keycloak 패턴: 401 + 에러 없음 → 즉시 OAuth 시작
+    window.location.href = '/login'
+  } catch {
+    loading.value = false
+  }
 })
 
 async function logout() {
   await fetch('/api/logout', { method: 'POST' })
-  user.value = null
+  window.location.href = '/?logout=1'
 }
 </script>
 

@@ -8,23 +8,40 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const e = params.get('error')
+    const loggedOut = params.get('logout')
     if (e) {
       setErrorMsg(e)
       window.history.replaceState({}, '', '/')
+    }
+    if (loggedOut) {
+      // 로그아웃 직후 자동 재로그인 루프 방지 — 한 번은 LoginPage 보여줌
+      window.history.replaceState({}, '', '/')
+      setLoading(false)
+      return
     }
 
     fetch('/api/me')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data) setUser(data)
-        setLoading(false)
+        if (data) {
+          setUser(data)
+          setLoading(false)
+        } else if (e) {
+          // 에러가 있으면 자동 재시도 안 함
+          setLoading(false)
+        } else {
+          // Keycloak 패턴: 401 + 에러 없음 → 즉시 OAuth 시작
+          // IdP 세션이 있으면 silent SSO 로 통과, 없으면 폼 표시
+          window.location.href = '/login'
+        }
       })
       .catch(() => setLoading(false))
   }, [])
 
   const logout = async () => {
     await fetch('/api/logout', { method: 'POST' })
-    setUser(null)
+    // 로그아웃 후 즉시 재로그인 막기 위해 marker 동봉
+    window.location.href = '/?logout=1'
   }
 
   if (loading) {
