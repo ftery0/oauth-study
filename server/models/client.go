@@ -30,7 +30,12 @@ type Client struct {
 	OwnerID   string // 등록한 사용자 ID (웹 등록 시)
 	CreatedAt time.Time
 
-	// SSO 그룹 연결 (PR2 도입)
+	// SSO 그룹 연결 (PR2 도입, R-7 cleanup 에서 제거 예정)
 	GroupID     string         // 소속 그룹 ID. "" 면 그룹 미소속 → silent SSO 영구 비활성
 	SSOOverride AppSSOOverride // 그룹 정책 오버라이드. 기본 OverrideInherit
+
+	// Phase-R: 이 client 가 silent SSO 에 참여하는가
+	// true  → IdP 세션이 있으면 폼 없이 즉시 code 발급
+	// false → 매번 로그인 폼 요구 ("이 앱은 매번 비밀번호 받음")
+	SilentSSO bool
 }

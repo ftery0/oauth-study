@@ -18,6 +18,7 @@ type ClientStore interface {
 	GetByClientID(clientID string) (*models.Client, bool)
 	All() []*models.Client
 	Register(c *models.Client) error
+	UpdateSilentSSO(clientID string, silentSSO bool) error
 }
 
 // GroupStore: ProjectGroup 영속 인터페이스 (Phase-R R-7 에서 제거 예정).

@@ -3,6 +3,7 @@ package store
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -64,6 +65,7 @@ func seedClient(id, name, groupID string, backendPort, frontendPort int) *models
 		CreatedAt:    time.Now(),
 		GroupID:      groupID,
 		SSOOverride:  models.OverrideInherit,
+		SilentSSO:    true,
 	}
 }
 
@@ -76,6 +78,18 @@ func (s *clientStore) All() []*models.Client {
 		out = append(out, c)
 	}
 	return out
+}
+
+// UpdateSilentSSO: silent_sso 토글 (인메모리).
+func (s *clientStore) UpdateSilentSSO(clientID string, silentSSO bool) error {
+	clientMutex.Lock()
+	defer clientMutex.Unlock()
+	c, ok := s.byID[clientID]
+	if !ok {
+		return errors.New("client not found")
+	}
+	c.SilentSSO = silentSSO
+	return nil
 }
 
 // GetByClientID: client_id 로 클라이언트 조회
