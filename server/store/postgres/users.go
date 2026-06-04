@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/ftery0/ouath/server/models"
+	"github.com/ftery0/ouath/server/store"
 )
 
 // UserStore: pgxpool 기반 글로벌 user pool 영속 구현체.
@@ -21,13 +22,6 @@ func NewUserStore(pool *pgxpool.Pool) *UserStore {
 	return &UserStore{pool: pool}
 }
 
-// ErrUserNotFound / ErrUserAlreadyExists: store.User* 에러와 매핑되도록 같은 이름의
-// 패키지 변수도 노출 — 호출자는 store.ErrUserNotFound 로 비교.
-var (
-	ErrUserNotFound      = errors.New("user not found")
-	ErrUserAlreadyExists = errors.New("user already exists")
-)
-
 func (s *UserStore) GetByUsername(ctx context.Context, username string) (*models.User, error) {
 	row := s.pool.QueryRow(ctx, `
 		SELECT id::text, username, password_hash, display_name, created_at, updated_at
@@ -35,7 +29,7 @@ func (s *UserStore) GetByUsername(ctx context.Context, username string) (*models
 	`, username)
 	u, err := scanUser(row)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrUserNotFound
+		return nil, store.ErrUserNotFound
 	}
 	return u, err
 }
@@ -47,7 +41,7 @@ func (s *UserStore) GetByID(ctx context.Context, id string) (*models.User, error
 	`, id)
 	u, err := scanUser(row)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrUserNotFound
+		return nil, store.ErrUserNotFound
 	}
 	return u, err
 }
@@ -84,7 +78,7 @@ func (s *UserStore) Create(ctx context.Context, u *models.User) error {
 	if err = row.Scan(&u.ID); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
-			return ErrUserAlreadyExists
+			return store.ErrUserAlreadyExists
 		}
 		return err
 	}
