@@ -87,14 +87,31 @@ public class OAuthController {
         session.setAttribute("accessToken", accessToken);
         session.setAttribute("refreshToken", (String) tokens.get("refresh_token"));
 
-        // 자동 프로비저닝: IdP userinfo → 내부 user 행 upsert + session 에 sub 박음
+        // 자동 프로비저닝: IdP userinfo → 내부 user 행 upsert + session 에 sub 박음.
+        // IdP 가 name (display_name) 을 주면 우선 사용, 없으면 sub fallback.
         Map<String, Object> userInfo = fetchUserInfo(accessToken);
         if (userInfo != null && userInfo.get("sub") instanceof String sub) {
-            users.findById(sub).orElseGet(() -> users.save(new User(sub, sub, null)));
+            String name = resolveDisplayName(userInfo, sub);
+            users.findById(sub).ifPresentOrElse(
+                u -> {
+                    if (!name.equals(u.getDisplayName())) {
+                        u.setDisplayName(name);
+                        users.save(u);
+                    }
+                },
+                () -> users.save(new User(sub, name))
+            );
             session.setAttribute("userSub", sub);
         }
 
         res.sendRedirect(frontendUrl);
+    }
+
+    // IdP userinfo 응답에서 표시명 결정. name > preferred_username > sub.
+    private String resolveDisplayName(Map<String, Object> userInfo, String sub) {
+        if (userInfo.get("name") instanceof String n && !n.isBlank()) return n;
+        if (userInfo.get("preferred_username") instanceof String u && !u.isBlank()) return u;
+        return sub;
     }
 
     @GetMapping("/api/me")
@@ -120,10 +137,20 @@ public class OAuthController {
             return ResponseEntity.status(500).body(Map.of("error", "Failed to fetch user info"));
         }
 
-        // 응답에 내부 displayName 동봉 (없으면 sub 그대로)
-        Map<String, Object> body = new HashMap<>(userInfo);
+        // /api/me 응답: 프론트가 실제로 쓰는 필드만 화이트리스트로 노출 (least info).
+        // 부수효과: IdP 의 name 으로 내부 user.display_name 동기화 (UUID 박힌 레거시 행 자동 보정).
+        Map<String, Object> body = new HashMap<>();
         if (userInfo.get("sub") instanceof String sub) {
-            users.findById(sub).ifPresent(u -> body.put("display_name", u.getDisplayName()));
+            body.put("sub", sub);
+            String name = resolveDisplayName(userInfo, sub);
+            users.findById(sub).ifPresent(u -> {
+                if (!name.equals(u.getDisplayName())) {
+                    u.setDisplayName(name);
+                    users.save(u);
+                }
+            });
+            if (userInfo.get("preferred_username") instanceof String pu) body.put("preferred_username", pu);
+            if (userInfo.get("name") instanceof String n) body.put("name", n);
             session.setAttribute("userSub", sub);
         }
         return ResponseEntity.ok(body);
