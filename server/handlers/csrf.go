@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 )
@@ -31,7 +32,7 @@ func NewCSRFToken(w http.ResponseWriter) (string, error) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     csrfCookieName,
 		Value:    token,
-		Path:     "/oauth/login",
+		Path:     "/oauth",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   isProduction,
@@ -44,14 +45,14 @@ func NewCSRFToken(w http.ResponseWriter) (string, error) {
 // form value 와 cookie value 가 같지 않으면 거부.
 func VerifyCSRFToken(r *http.Request) error {
 	formToken := r.FormValue("csrf_token")
-	if formToken == "" {
-		return ErrCSRFMismatch
+	c, cookieErr := r.Cookie(csrfCookieName)
+	cookieVal := ""
+	if cookieErr == nil {
+		cookieVal = c.Value
 	}
-	c, err := r.Cookie(csrfCookieName)
-	if err != nil {
-		return ErrCSRFMismatch
-	}
-	if c.Value == "" || c.Value != formToken {
+	if formToken == "" || cookieErr != nil || cookieVal == "" || cookieVal != formToken {
+		log.Printf("[csrf] mismatch path=%s formLen=%d cookieErr=%v cookieLen=%d match=%v",
+			r.URL.Path, len(formToken), cookieErr, len(cookieVal), cookieVal == formToken)
 		return ErrCSRFMismatch
 	}
 	return nil
@@ -62,7 +63,7 @@ func ClearCSRFToken(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:   csrfCookieName,
 		Value:  "",
-		Path:   "/oauth/login",
+		Path:   "/oauth",
 		MaxAge: -1,
 	})
 }
