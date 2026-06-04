@@ -81,23 +81,16 @@
             </div>
 
             <div>
-                <label for="group_id" class="block text-sm font-medium text-slate-300 mb-1">소속 그룹</label>
-                <select id="group_id" name="group_id"
-                        class="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-base text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">(미소속 · silent SSO 영구 비활성)</option>
-                    {{range .Groups}}
-                    <option value="{{.ID}}" {{if eq .ID $.GroupID}}selected{{end}}>{{.Name}} ({{.ID}}, SSO={{.SSODefault}})</option>
-                    {{end}}
-                </select>
-            </div>
-
-            <div>
-                <label class="block text-sm font-medium text-slate-300 mb-2">SSO override</label>
+                <label class="block text-sm font-medium text-slate-300 mb-2">Silent SSO 참여</label>
                 <div class="space-y-2 text-sm">
-                    {{$cur := .SSOOverride}}
-                    <label class="flex items-start gap-2"><input type="radio" name="sso_override" value="INHERIT" {{if eq $cur "INHERIT"}}checked{{end}} class="mt-1"><span><strong>INHERIT</strong> · 그룹 정책 따름 (기본)</span></label>
-                    <label class="flex items-start gap-2"><input type="radio" name="sso_override" value="FORCE_ON" {{if eq $cur "FORCE_ON"}}checked{{end}} class="mt-1"><span><strong>FORCE_ON</strong> · 그룹이 OFF 여도 silent 허용</span></label>
-                    <label class="flex items-start gap-2"><input type="radio" name="sso_override" value="FORCE_OFF" {{if eq $cur "FORCE_OFF"}}checked{{end}} class="mt-1"><span><strong>FORCE_OFF</strong> · 그룹이 ON 이어도 매번 로그인</span></label>
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="radio" name="silent_sso" value="true" {{if .SilentSSO}}checked{{end}} class="mt-1">
+                        <span><strong class="text-emerald-300">ON</strong> · 다른 앱과 로그인 세션을 공유 (기본)</span>
+                    </label>
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="radio" name="silent_sso" value="false" {{if not .SilentSSO}}checked{{end}} class="mt-1">
+                        <span><strong class="text-amber-300">OFF</strong> · 이 앱은 매번 비밀번호 입력 필요</span>
+                    </label>
                 </div>
             </div>
 

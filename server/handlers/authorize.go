@@ -56,35 +56,23 @@ func AuthorizeHandler(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 
-		// 3. IdP 세션 조회 (없으면 hasSession=false)
+		// 3. IdP 세션 조회 — Phase-R 단순화: LastGroupID 더 이상 안 본다
 		var (
-			hasSession     bool
-			sessionGroupID string
-			userID         string
+			hasSession bool
+			userID     string
 		)
 		if sid, ok := GetIdPSessionID(r); ok {
 			if sess, ok := store.IdPSessions.Get(sid); ok {
 				hasSession = true
-				sessionGroupID = sess.LastGroupID
 				userID = sess.UserID
 			}
 		}
 
-		// 4. 그룹 조회 (client 가 그룹 미소속이면 nil — Resolver 가 PROMPT 처리)
-		var group *models.ProjectGroup
-		if client.GroupID != "" {
-			if g, ok := store.Groups.Get(client.GroupID); ok {
-				group = g
-			}
-		}
-
-		// 5. 정책 결정
+		// 4. 정책 결정 — 그룹 입력 제거 (HasSession, Client.SilentSSO, Prompt 3 입력)
 		decision := policy.Resolve(policy.Inputs{
-			HasSession:     hasSession,
-			SessionGroupID: sessionGroupID,
-			Client:         client,
-			Group:          group,
-			Prompt:         prompt,
+			HasSession: hasSession,
+			Client:     client,
+			Prompt:     prompt,
 		})
 
 		switch decision {

@@ -44,17 +44,17 @@ func main() {
 			if err := db.RunMigrations(ctx); err != nil {
 				log.Fatal("migration 실패: ", err)
 			}
-			pgGroups := pgstore.NewGroupStore(db.Pool)
 			pgClients := pgstore.NewClientStore(db.Pool)
-			// 시드 (이미 있으면 ON CONFLICT DO NOTHING)
-			if err := store.SeedGroups(pgGroups); err != nil {
-				log.Fatal("seed groups: ", err)
-			}
+			pgUsers := pgstore.NewUserStore(db.Pool)
+			// 시드 (이미 있으면 ON CONFLICT DO NOTHING / ErrUserAlreadyExists 흡수)
 			if err := store.SeedClients(pgClients); err != nil {
 				log.Fatal("seed clients: ", err)
 			}
-			store.Groups = pgGroups
+			if err := store.SeedUsers(ctx, pgUsers); err != nil {
+				log.Fatal("seed users: ", err)
+			}
 			store.Clients = pgClients
+			store.Users = pgUsers
 			log.Println("Postgres 연결 + 시드 OK · store=postgres")
 		}
 	}

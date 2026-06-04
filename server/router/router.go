@@ -20,6 +20,10 @@ func New(tmpl *template.Template) *http.ServeMux {
 	// JWKS: 공개키 배포 엔드포인트 (클라이언트가 JWT 서명을 자체 검증할 때 사용)
 	mux.HandleFunc("GET /oauth/jwks", handlers.JWKSHandler)
 
+	// Phase-R R-4: 회원가입
+	mux.HandleFunc("GET /oauth/register", handlers.RegisterGetHandler(tmpl))
+	mux.HandleFunc("POST /oauth/register", handlers.RegisterPostHandler(tmpl))
+
 	// 어드민 (Phase 2-A): 단일 비밀번호 게이트 + read-only 시드 표시
 	mux.HandleFunc("GET /admin/login", handlers.AdminLoginGetHandler(tmpl))
 	mux.HandleFunc("POST /admin/login", handlers.AdminLoginPostHandler(tmpl))
@@ -27,8 +31,7 @@ func New(tmpl *template.Template) *http.ServeMux {
 	mux.Handle("GET /admin", handlers.RequireAdminAuth(handlers.AdminMainHandler(tmpl)))
 	mux.Handle("GET /admin/clients/new", handlers.RequireAdminAuth(handlers.AdminClientNewFormHandler(tmpl)))
 	mux.Handle("POST /admin/clients", handlers.RequireAdminAuth(handlers.AdminClientCreateHandler(tmpl)))
-	mux.Handle("POST /admin/groups", handlers.RequireAdminAuth(http.HandlerFunc(handlers.AdminGroupCreateHandler)))
-	mux.Handle("POST /admin/groups/{id}/policy", handlers.RequireAdminAuth(http.HandlerFunc(handlers.AdminGroupPolicyHandler)))
+	mux.Handle("POST /admin/clients/{id}/silent-sso", handlers.RequireAdminAuth(http.HandlerFunc(handlers.AdminClientSilentSSOHandler)))
 
 	return mux
 }
