@@ -82,14 +82,8 @@ func LoginHandler(tmpl *template.Template) http.HandlerFunc {
 			store.IdPSessions.Delete(oldSid)
 		}
 
-		// 3. 현재 로그인 그룹 ID 조회 (R-7 cleanup 까지 임시 유지)
-		var groupID string
-		if client, ok := store.Clients.GetByClientID(clientID); ok {
-			groupID = client.GroupID
-		}
-
-		// 4. 새 IdP 세션 발급 — UserID 는 DB 의 UUID
-		sid, err := store.IdPSessions.Create(user.ID, groupID)
+		// 3. 새 IdP 세션 발급 — UserID 는 DB 의 UUID
+		sid, err := store.IdPSessions.Create(user.ID)
 		if err != nil {
 			http.Error(w, "세션 생성 실패", http.StatusInternalServerError)
 			return

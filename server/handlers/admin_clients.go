@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"html/template"
 	"net/http"
@@ -11,6 +12,13 @@ import (
 	"github.com/ftery0/ouath/server/models"
 	"github.com/ftery0/ouath/server/store"
 )
+
+// writeJSON: 표준 JSON 응답 헬퍼.
+func writeJSON(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(data)
+}
 
 // adminClientNewPageData: 신규 등록 폼에 넘기는 데이터.
 // Phase-R: 그룹/override 제거. silent_sso 토글 기본값 true.

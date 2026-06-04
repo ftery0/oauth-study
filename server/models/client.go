@@ -2,19 +2,9 @@ package models
 
 import "time"
 
-// AppSSOOverride: 앱 단위 SSO 정책 오버라이드.
-// INHERIT 면 그룹의 SSODefault 를 따르고, FORCE_ON/FORCE_OFF 는
-// 그룹 정책을 명시적으로 덮어쓴다.
-type AppSSOOverride string
-
-const (
-	OverrideInherit  AppSSOOverride = "INHERIT"
-	OverrideForceON  AppSSOOverride = "FORCE_ON"
-	OverrideForceOFF AppSSOOverride = "FORCE_OFF"
-)
-
-// Client: OAuth 클라이언트 (서비스) 등록 정보
-// 웹에서 서비스 등록 시 입력받는 필드 + OAuth 식별자
+// Client: OAuth 클라이언트 (서비스) 등록 정보.
+//
+// Phase-R 단순화: GroupID, SSOOverride 제거. silent_sso 단일 토글로 정책 결정.
 type Client struct {
 	ID           string // 내부 UUID
 	ClientID     string // OAuth client_id (노출용)
@@ -30,12 +20,8 @@ type Client struct {
 	OwnerID   string // 등록한 사용자 ID (웹 등록 시)
 	CreatedAt time.Time
 
-	// SSO 그룹 연결 (PR2 도입, R-7 cleanup 에서 제거 예정)
-	GroupID     string         // 소속 그룹 ID. "" 면 그룹 미소속 → silent SSO 영구 비활성
-	SSOOverride AppSSOOverride // 그룹 정책 오버라이드. 기본 OverrideInherit
-
-	// Phase-R: 이 client 가 silent SSO 에 참여하는가
+	// 이 client 가 silent SSO 에 참여하는가
 	// true  → IdP 세션이 있으면 폼 없이 즉시 code 발급
-	// false → 매번 로그인 폼 요구 ("이 앱은 매번 비밀번호 받음")
+	// false → 매번 로그인 폼 요구
 	SilentSSO bool
 }

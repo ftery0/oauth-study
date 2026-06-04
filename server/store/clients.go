@@ -28,18 +28,18 @@ type clientStore struct {
 func init() {
 	// 학습/데모용 시드 client. 인메모리 인스턴스에만 자동 적용.
 	// Postgres 사용 시 main 에서 SeedClients 를 명시적으로 호출.
-	defaultMemoryClients.register(seedClient("app1", "App 1", "group-a", 8011, 5181))
-	defaultMemoryClients.register(seedClient("app2", "App 2", "group-a", 8012, 5182))
-	defaultMemoryClients.register(seedClient("app3", "App 3", "group-b", 8013, 5183))
+	defaultMemoryClients.register(seedClient("app1", "App 1", 8011, 5181))
+	defaultMemoryClients.register(seedClient("app2", "App 2", 8012, 5182))
+	defaultMemoryClients.register(seedClient("app3", "App 3", 8013, 5183))
 }
 
 // SeedClients: 시드 client 들을 임의의 ClientStore 에 등록한다 (Postgres SeedIfEmpty 용).
 // 같은 client_id 가 이미 있으면 무시 (Register 가 ON CONFLICT DO NOTHING).
 func SeedClients(s ClientStore) error {
 	seeds := []*models.Client{
-		seedClient("app1", "App 1", "group-a", 8011, 5181),
-		seedClient("app2", "App 2", "group-a", 8012, 5182),
-		seedClient("app3", "App 3", "group-b", 8013, 5183),
+		seedClient("app1", "App 1", 8011, 5181),
+		seedClient("app2", "App 2", 8012, 5182),
+		seedClient("app3", "App 3", 8013, 5183),
 	}
 	for _, c := range seeds {
 		if err := s.Register(c); err != nil {
@@ -51,7 +51,7 @@ func SeedClients(s ClientStore) error {
 
 // seedClient: 학습용 헬퍼. ClientSecret 도 식별 가능한 형태로 고정한다
 // (다음 phase 의 어드민 UI 가 도입되면 secret 은 랜덤 생성으로 바뀐다).
-func seedClient(id, name, groupID string, backendPort, frontendPort int) *models.Client {
+func seedClient(id, name string, backendPort, frontendPort int) *models.Client {
 	return &models.Client{
 		ID:           "seed-" + id,
 		ClientID:     id,
@@ -63,8 +63,6 @@ func seedClient(id, name, groupID string, backendPort, frontendPort int) *models
 		RedirectURIs: []string{fmt.Sprintf("http://localhost:%d/callback", backendPort)},
 		OwnerID:      "",
 		CreatedAt:    time.Now(),
-		GroupID:      groupID,
-		SSOOverride:  models.OverrideInherit,
 		SilentSSO:    true,
 	}
 }

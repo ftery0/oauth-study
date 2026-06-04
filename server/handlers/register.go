@@ -161,7 +161,7 @@ func RegisterPostHandler(tmpl *template.Template) http.HandlerFunc {
 		if oldSid, ok := GetIdPSessionID(r); ok {
 			store.IdPSessions.Delete(oldSid)
 		}
-		sid, err := store.IdPSessions.Create(newUser.ID, client.GroupID)
+		sid, err := store.IdPSessions.Create(newUser.ID)
 		if err != nil {
 			http.Error(w, "세션 생성 실패", http.StatusInternalServerError)
 			return

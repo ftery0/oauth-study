@@ -29,7 +29,9 @@ var IdPSessions = &idpSessionStore{m: make(map[string]*models.IdPSession)}
 
 // Create: 새 sessionID 발급 + 저장. 세션 고정 공격 방어를 위해 매 로그인마다 호출.
 // 기존 sid 가 있었다면 호출자(login handler) 가 Delete 로 명시적으로 폐기해야 한다.
-func (s *idpSessionStore) Create(userID, groupID string) (string, error) {
+//
+// Phase-R: groupID 인자 제거 (글로벌 user pool).
+func (s *idpSessionStore) Create(userID string) (string, error) {
 	sid, err := randomHex32()
 	if err != nil {
 		return "", err
@@ -37,11 +39,10 @@ func (s *idpSessionStore) Create(userID, groupID string) (string, error) {
 	now := time.Now()
 	s.mu.Lock()
 	s.m[sid] = &models.IdPSession{
-		SessionID:   sid,
-		UserID:      userID,
-		LastGroupID: groupID,
-		LoginAt:     now,
-		ExpiresAt:   now.Add(IdPSessionTTL),
+		SessionID: sid,
+		UserID:    userID,
+		LoginAt:   now,
+		ExpiresAt: now.Add(IdPSessionTTL),
 	}
 	s.mu.Unlock()
 	return sid, nil
@@ -64,13 +65,11 @@ func (s *idpSessionStore) Get(sid string) (*models.IdPSession, bool) {
 	return &clone, true
 }
 
-// Touch: 같은 sid 의 LastGroupID 와 만료시간을 갱신.
-// 같은 사용자가 다른 그룹의 앱에서 다시 로그인할 때 사용.
-func (s *idpSessionStore) Touch(sid, lastGroupID string) {
+// Touch: 만료시간 갱신 (Phase-R: groupID 인자 제거).
+func (s *idpSessionStore) Touch(sid string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if sess, ok := s.m[sid]; ok && !sess.Expired() {
-		sess.LastGroupID = lastGroupID
 		sess.ExpiresAt = time.Now().Add(IdPSessionTTL)
 	}
 }

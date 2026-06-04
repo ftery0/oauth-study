@@ -21,14 +21,6 @@ type ClientStore interface {
 	UpdateSilentSSO(clientID string, silentSSO bool) error
 }
 
-// GroupStore: ProjectGroup 영속 인터페이스 (Phase-R R-7 에서 제거 예정).
-type GroupStore interface {
-	Get(id string) (*models.ProjectGroup, bool)
-	All() []*models.ProjectGroup
-	Register(g *models.ProjectGroup) error
-	UpdateSSODefault(id string, ssoDefault models.SSODefault) error
-}
-
 // UserStore: 글로벌 user pool 영속 인터페이스 (Phase-R R-2 신규).
 // Postgres 가 기본. ErrUserNotFound / ErrUserAlreadyExists 로 호출자가 분기.
 type UserStore interface {
@@ -38,11 +30,7 @@ type UserStore interface {
 }
 
 // 컴파일 타임 인터페이스 충족 검증.
-// 새 구현체를 추가하면 여기에도 한 줄 더 추가해서 type-check 한다.
-var (
-	_ ClientStore = (*clientStore)(nil)
-	_ GroupStore  = (*groupStore)(nil)
-)
+var _ ClientStore = (*clientStore)(nil)
 
 // Users: 외부 노출. main 이 Postgres 구현체로 주입.
 var Users UserStore

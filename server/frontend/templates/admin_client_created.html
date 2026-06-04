@@ -44,8 +44,7 @@
             <h3 class="text-sm font-semibold text-slate-300 mb-3">등록된 정보</h3>
             <dl class="space-y-2 text-sm">
                 <div class="flex justify-between border-b border-slate-800 pb-2"><dt class="text-slate-400">서비스명</dt><dd>{{.Client.Name}}</dd></div>
-                <div class="flex justify-between border-b border-slate-800 pb-2"><dt class="text-slate-400">소속 그룹</dt><dd class="font-mono">{{if .Client.GroupID}}{{.Client.GroupID}}{{else}}(미소속){{end}}</dd></div>
-                <div class="flex justify-between border-b border-slate-800 pb-2"><dt class="text-slate-400">SSO override</dt><dd class="font-mono">{{.Client.SSOOverride}}</dd></div>
+                <div class="flex justify-between border-b border-slate-800 pb-2"><dt class="text-slate-400">Silent SSO</dt><dd class="font-mono {{if .Client.SilentSSO}}text-emerald-300{{else}}text-amber-300{{end}}">{{if .Client.SilentSSO}}ON{{else}}OFF{{end}}</dd></div>
                 <div class="flex justify-between border-b border-slate-800 pb-2"><dt class="text-slate-400">메인 URL</dt><dd class="font-mono break-all">{{if .Client.MainURL}}{{.Client.MainURL}}{{else}}—{{end}}</dd></div>
                 <div>
                     <dt class="text-slate-400 mb-1">리다이렉트 URL</dt>
