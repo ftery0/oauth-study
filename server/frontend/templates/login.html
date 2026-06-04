@@ -53,6 +53,14 @@
                 로그인
             </button>
         </form>
+
+        <div class="mt-6 pt-4 border-t border-slate-200 text-center text-sm text-slate-500">
+            아직 계정이 없으신가요?
+            <a href="/oauth/register?client_id={{.ClientID}}&redirect_uri={{.RedirectURI}}&state={{.State}}&scope={{.Scope}}"
+               class="font-medium text-indigo-600 hover:text-indigo-700 ml-1">
+                회원가입
+            </a>
+        </div>
     </main>
 </body>
 </html>

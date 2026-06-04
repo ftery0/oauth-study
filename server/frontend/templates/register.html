@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.ClientName}} 회원가입</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans antialiased text-slate-900">
+    <main class="w-full max-w-md bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+        <header class="mb-6">
+            <h1 class="text-xl sm:text-2xl font-semibold">{{.ClientName}} 회원가입</h1>
+            <p class="mt-1 text-sm text-slate-500">가입 후 자동으로 로그인됩니다</p>
+        </header>
+
+        {{if .ErrorMsg}}
+        <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700" role="alert">
+            {{.ErrorMsg}}
+        </div>
+        {{end}}
+
+        <form action="/oauth/register" method="POST" class="space-y-3">
+            <div>
+                <label for="username" class="block text-xs text-slate-500 mb-1">아이디 <span class="text-red-400">*</span></label>
+                <input id="username" type="text" name="username" required autofocus
+                       value="{{.Username}}"
+                       autocomplete="username"
+                       pattern="[a-z0-9_-]{3,32}"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-3 text-base placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                       placeholder="영문 소문자/숫자, 3~32자">
+            </div>
+            <div>
+                <label for="password" class="block text-xs text-slate-500 mb-1">비밀번호 <span class="text-red-400">*</span></label>
+                <input id="password" type="password" name="password" required
+                       autocomplete="new-password"
+                       minlength="8"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-3 text-base placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                       placeholder="8자 이상">
+            </div>
+            <div>
+                <label for="password_confirm" class="block text-xs text-slate-500 mb-1">비밀번호 확인 <span class="text-red-400">*</span></label>
+                <input id="password_confirm" type="password" name="password_confirm" required
+                       autocomplete="new-password"
+                       minlength="8"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-3 text-base placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                       placeholder="한 번 더">
+            </div>
+
+            <input type="hidden" name="client_id"    value="{{.ClientID}}">
+            <input type="hidden" name="redirect_uri" value="{{.RedirectURI}}">
+            <input type="hidden" name="state"        value="{{.State}}">
+            <input type="hidden" name="scope"        value="{{.Scope}}">
+            <input type="hidden" name="csrf_token"   value="{{.CSRFToken}}">
+
+            <button type="submit"
+                    class="w-full rounded-lg bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-medium px-4 py-3 text-base transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                가입하고 계속
+            </button>
+        </form>
+
+        <div class="mt-6 pt-4 border-t border-slate-200 text-center text-sm text-slate-500">
+            이미 계정이 있으신가요?
+            <a href="/oauth/authorize?response_type=code&client_id={{.ClientID}}&redirect_uri={{.RedirectURI}}&state={{.State}}&scope={{.Scope}}"
+               class="font-medium text-indigo-600 hover:text-indigo-700 ml-1">
+                로그인
+            </a>
+        </div>
+    </main>
+</body>
+</html>
