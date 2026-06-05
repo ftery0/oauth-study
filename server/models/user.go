@@ -9,6 +9,8 @@ type User struct {
 	Username     string
 	PasswordHash string
 	DisplayName  string
+	Email        string // OIDC email claim. 비어있을 수 있음 (legacy / 비공개)
+	EmailVerified bool  // OIDC email_verified claim
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
@@ -22,9 +24,9 @@ const seedPasswordHash = "$2a$12$dC674FROOYvOF.OPHSWntuvU2QjhGHtIUe2LvUFJepN.DmS
 // Phase-R R-3 부터 /oauth/login 은 이 map 대신 DB 의 users 테이블을 조회한다.
 // 본 map 은 Postgres 시드용으로 사용된 후 R-7 에서 제거 예정.
 var TestUsers = map[string]User{
-	"alice": {Username: "alice", PasswordHash: seedPasswordHash, DisplayName: "Alice"},
-	"bob":   {Username: "bob", PasswordHash: seedPasswordHash, DisplayName: "Bob"},
-	"carol": {Username: "carol", PasswordHash: seedPasswordHash, DisplayName: "Carol"},
+	"alice": {Username: "alice", PasswordHash: seedPasswordHash, DisplayName: "Alice", Email: "alice@example.com", EmailVerified: true},
+	"bob":   {Username: "bob", PasswordHash: seedPasswordHash, DisplayName: "Bob", Email: "bob@example.com", EmailVerified: true},
+	"carol": {Username: "carol", PasswordHash: seedPasswordHash, DisplayName: "Carol", Email: "carol@example.com", EmailVerified: true},
 }
 
 // DummyPasswordHash: timing attack 완화용.

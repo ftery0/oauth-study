@@ -26,7 +26,7 @@ func (s *ClientStore) GetByClientID(clientID string) (*models.Client, bool) {
 	defer cancel()
 
 	row := s.pool.QueryRow(ctx, `
-		SELECT id, client_id, client_secret, name, description,
+		SELECT id, client_id, COALESCE(client_secret_hash, ''), name, description,
 		       main_url, server_urls, redirect_uris, owner_id,
 		       silent_sso, created_at
 		FROM clients WHERE client_id = $1
@@ -44,7 +44,7 @@ func (s *ClientStore) All() []*models.Client {
 	defer cancel()
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, client_id, client_secret, name, description,
+		SELECT id, client_id, COALESCE(client_secret_hash, ''), name, description,
 		       main_url, server_urls, redirect_uris, owner_id,
 		       silent_sso, created_at
 		FROM clients ORDER BY created_at ASC
@@ -81,13 +81,13 @@ func (s *ClientStore) Register(c *models.Client) error {
 
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO clients (
-		    id, client_id, client_secret, name, description,
+		    id, client_id, client_secret_hash, name, description,
 		    main_url, server_urls, redirect_uris, owner_id,
 		    silent_sso, created_at
 		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
 		ON CONFLICT (client_id) DO NOTHING
 	`,
-		c.ID, c.ClientID, c.ClientSecret, c.Name, c.Description,
+		c.ID, c.ClientID, c.ClientSecretHash, c.Name, c.Description,
 		c.MainURL, c.ServerURLs, c.RedirectURIs, c.OwnerID,
 		c.SilentSSO, c.CreatedAt,
 	)
@@ -112,10 +112,11 @@ func (s *ClientStore) UpdateSilentSSO(clientID string, silentSSO bool) error {
 }
 
 // scanClient: pgx.Row / pgx.Rows 둘 다 받아서 Client 채움.
+// 평문 ClientSecret 은 DB 에서 안 읽어옴 (영속 안 함). ClientSecretHash 만.
 func scanClient(row pgx.Row) (*models.Client, error) {
 	var c models.Client
 	if err := row.Scan(
-		&c.ID, &c.ClientID, &c.ClientSecret, &c.Name, &c.Description,
+		&c.ID, &c.ClientID, &c.ClientSecretHash, &c.Name, &c.Description,
 		&c.MainURL, &c.ServerURLs, &c.RedirectURIs, &c.OwnerID,
 		&c.SilentSSO, &c.CreatedAt,
 	); err != nil {

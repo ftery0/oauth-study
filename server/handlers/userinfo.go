@@ -11,20 +11,25 @@ import (
 	"github.com/ftery0/ouath/server/token"
 )
 
-// UserInfoHandler: /oauth/userinfo.
+// UserInfoHandler: /oauth/userinfo (OIDC Core §5.3).
 //
-// 응답 필드:
-//   - sub                 : 사용자 ID (UUID). OIDC 표준 필드
-//   - preferred_username  : users.username.        OIDC 표준 (scope=profile 일 때만)
-//   - name                : users.display_name.    OIDC 표준 (scope=profile 일 때만)
-//   - client_id, scope    : 비표준 (학습용 디버그). 토큰 claim 을 그대로 노출
-//
-// scope 에 "profile" 이 포함되지 않으면 username/name 은 응답하지 않는다 (OIDC 표준 동작).
+// 응답 필드 (scope 별로 필터링):
+//   - sub                 : 항상 — 사용자 ID (UUID)
+//   - preferred_username  : scope=profile — users.username
+//   - name                : scope=profile — users.display_name
+//   - email               : scope=email — users.email
+//   - email_verified      : scope=email — users.email_verified
+//   - client_id, scope    : 비표준 (학습용 디버그). 토큰 claim 그대로
 func UserInfoHandler(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	tokenStr, ok := strings.CutPrefix(authHeader, "Bearer ")
 	if !ok {
 		http.Error(w, "Authorization 헤더 없음", http.StatusUnauthorized)
+		return
+	}
+
+	if IsAccessTokenRevoked(tokenStr) {
+		http.Error(w, "토큰이 폐기됨", http.StatusUnauthorized)
 		return
 	}
 
@@ -40,11 +45,20 @@ func UserInfoHandler(w http.ResponseWriter, r *http.Request) {
 		"scope":     claims.Scope,
 	}
 
-	if hasProfileScope(claims.Scope) && store.Users != nil {
+	scopes := strings.Fields(claims.Scope)
+	needsUserLookup := contains(scopes, "profile") || contains(scopes, "email")
+
+	if needsUserLookup && store.Users != nil {
 		u, err := store.Users.GetByID(r.Context(), claims.UserID)
 		if err == nil && u != nil {
-			resp["preferred_username"] = u.Username
-			resp["name"] = u.DisplayName
+			if contains(scopes, "profile") {
+				resp["preferred_username"] = u.Username
+				resp["name"] = u.DisplayName
+			}
+			if contains(scopes, "email") && u.Email != "" {
+				resp["email"] = u.Email
+				resp["email_verified"] = u.EmailVerified
+			}
 		} else if err != nil && !errors.Is(err, store.ErrUserNotFound) {
 			log.Printf("[userinfo] GetByID failed sub=%s err=%v", claims.UserID, err)
 		}
@@ -54,9 +68,9 @@ func UserInfoHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-func hasProfileScope(scope string) bool {
-	for _, s := range strings.Fields(scope) {
-		if s == "profile" {
+func contains(ss []string, target string) bool {
+	for _, s := range ss {
+		if s == target {
 			return true
 		}
 	}

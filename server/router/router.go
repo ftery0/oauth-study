@@ -20,6 +20,13 @@ func New(tmpl *template.Template) *http.ServeMux {
 	// JWKS: 공개키 배포 엔드포인트 (클라이언트가 JWT 서명을 자체 검증할 때 사용)
 	mux.HandleFunc("GET /oauth/jwks", handlers.JWKSHandler)
 
+	// Phase-S: Discovery + RFC 7009 revoke + RFC 7662 introspect + OIDC end_session.
+	mux.HandleFunc("GET /.well-known/openid-configuration", handlers.DiscoveryHandler)
+	mux.HandleFunc("POST /oauth/revoke", handlers.RevokeHandler)
+	mux.HandleFunc("POST /oauth/introspect", handlers.IntrospectHandler)
+	mux.HandleFunc("GET /oauth/logout", handlers.LogoutHandler(tmpl))
+	mux.HandleFunc("POST /oauth/logout", handlers.LogoutHandler(tmpl))
+
 	// Phase-R R-4: 회원가입
 	mux.HandleFunc("GET /oauth/register", handlers.RegisterGetHandler(tmpl))
 	mux.HandleFunc("POST /oauth/register", handlers.RegisterPostHandler(tmpl))

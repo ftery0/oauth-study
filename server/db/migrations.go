@@ -47,8 +47,12 @@ CREATE INDEX IF NOT EXISTS idx_clients_group_id ON clients(group_id);
 -- 글로벌 user pool 모델로 가면서 그룹 정책 대신 client 단위 토글로.
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS silent_sso BOOLEAN NOT NULL DEFAULT true;
 
+-- Phase-S: client_secret 을 bcrypt hash 로 저장.
+-- 기존 plaintext client_secret 컬럼은 부팅 시 backfill 후 비움 (NULL).
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS client_secret_hash TEXT;
+ALTER TABLE clients ALTER COLUMN client_secret DROP NOT NULL;
+
 -- Phase-R R-1: users 글로벌 테이블.
--- 코드 하드코딩 TestUsers 를 대체. 이메일/실명은 학습 범위 외라 username + hash 만.
 CREATE TABLE IF NOT EXISTS users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username        TEXT NOT NULL UNIQUE,
@@ -58,6 +62,12 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
+-- Phase-S: OIDC userinfo 표준 클레임을 위해 email + email_verified.
+-- 이메일 인증 흐름은 학습 범위 외라 email_verified 는 기본 false.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL;
 `
 
 // RunMigrations: schema 를 멱등하게 적용. main 부팅 시 db.Connect 후 호출.

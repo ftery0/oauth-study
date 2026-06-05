@@ -24,7 +24,7 @@ func NewUserStore(pool *pgxpool.Pool) *UserStore {
 
 func (s *UserStore) GetByUsername(ctx context.Context, username string) (*models.User, error) {
 	row := s.pool.QueryRow(ctx, `
-		SELECT id::text, username, password_hash, display_name, created_at, updated_at
+		SELECT id::text, username, password_hash, display_name, COALESCE(email, ''), email_verified, created_at, updated_at
 		FROM users WHERE username = $1
 	`, username)
 	u, err := scanUser(row)
@@ -36,7 +36,7 @@ func (s *UserStore) GetByUsername(ctx context.Context, username string) (*models
 
 func (s *UserStore) GetByID(ctx context.Context, id string) (*models.User, error) {
 	row := s.pool.QueryRow(ctx, `
-		SELECT id::text, username, password_hash, display_name, created_at, updated_at
+		SELECT id::text, username, password_hash, display_name, COALESCE(email, ''), email_verified, created_at, updated_at
 		FROM users WHERE id = $1
 	`, id)
 	u, err := scanUser(row)
@@ -61,18 +61,22 @@ func (s *UserStore) Create(ctx context.Context, u *models.User) error {
 		row pgx.Row
 		err error
 	)
+	emailArg := any(nil)
+	if u.Email != "" {
+		emailArg = u.Email
+	}
 	if u.ID != "" {
 		row = s.pool.QueryRow(ctx, `
-			INSERT INTO users (id, username, password_hash, display_name, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6)
+			INSERT INTO users (id, username, password_hash, display_name, email, email_verified, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			RETURNING id::text
-		`, u.ID, u.Username, u.PasswordHash, u.DisplayName, u.CreatedAt, u.UpdatedAt)
+		`, u.ID, u.Username, u.PasswordHash, u.DisplayName, emailArg, u.EmailVerified, u.CreatedAt, u.UpdatedAt)
 	} else {
 		row = s.pool.QueryRow(ctx, `
-			INSERT INTO users (username, password_hash, display_name, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, $5)
+			INSERT INTO users (username, password_hash, display_name, email, email_verified, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
 			RETURNING id::text
-		`, u.Username, u.PasswordHash, u.DisplayName, u.CreatedAt, u.UpdatedAt)
+		`, u.Username, u.PasswordHash, u.DisplayName, emailArg, u.EmailVerified, u.CreatedAt, u.UpdatedAt)
 	}
 
 	if err = row.Scan(&u.ID); err != nil {
@@ -88,7 +92,7 @@ func (s *UserStore) Create(ctx context.Context, u *models.User) error {
 func scanUser(row pgx.Row) (*models.User, error) {
 	var u models.User
 	if err := row.Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &u.DisplayName, &u.CreatedAt, &u.UpdatedAt,
+		&u.ID, &u.Username, &u.PasswordHash, &u.DisplayName, &u.Email, &u.EmailVerified, &u.CreatedAt, &u.UpdatedAt,
 	); err != nil {
 		return nil, err
 	}
