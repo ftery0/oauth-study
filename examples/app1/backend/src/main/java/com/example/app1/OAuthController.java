@@ -86,6 +86,10 @@ public class OAuthController {
         String accessToken = (String) tokens.get("access_token");
         session.setAttribute("accessToken", accessToken);
         session.setAttribute("refreshToken", (String) tokens.get("refresh_token"));
+        // id_token: RP-initiated logout 의 id_token_hint 로 사용 (openid scope 일 때만 IdP 가 발급)
+        if (tokens.get("id_token") instanceof String idToken) {
+            session.setAttribute("idToken", idToken);
+        }
 
         // 자동 프로비저닝: IdP userinfo → 내부 user 행 upsert + session 에 sub 박음.
         // IdP 가 name (display_name) 을 주면 우선 사용, 없으면 sub fallback.
@@ -156,13 +160,26 @@ public class OAuthController {
         return ResponseEntity.ok(body);
     }
 
-    @PostMapping("/api/logout")
-    public Map<String, Boolean> logout(HttpServletRequest req) {
+    // 로그아웃: app1 세션 무효화 + IdP 의 RP-initiated logout 으로 리다이렉트.
+    // 단순히 app1 세션만 끊으면 silent SSO 가 다시 자동 로그인시키므로 IdP 세션까지 같이 정리해야 진짜 로그아웃.
+    @GetMapping("/api/logout")
+    public void logout(HttpServletRequest req, HttpServletResponse res) throws IOException {
+        String idTokenHint = null;
         HttpSession session = req.getSession(false);
         if (session != null) {
+            if (session.getAttribute("idToken") instanceof String t) {
+                idTokenHint = t;
+            }
             session.invalidate();
         }
-        return Map.of("ok", true);
+
+        // 프론트는 비로그인 시 공개 메인 표시. logout=1 hint 같은 거 불필요 — 그냥 메인으로.
+        StringBuilder url = new StringBuilder(oauthServerUrl).append("/oauth/logout")
+                .append("?post_logout_redirect_uri=").append(urlEncode(frontendUrl));
+        if (idTokenHint != null) {
+            url.append("&id_token_hint=").append(urlEncode(idTokenHint));
+        }
+        res.sendRedirect(url.toString());
     }
 
     private Map<String, Object> exchangeToken(String code) throws IOException, InterruptedException {

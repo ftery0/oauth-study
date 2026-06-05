@@ -20,33 +20,22 @@ export default function Page() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const e = params.get('error')
-    const loggedOut = params.get('logout')
     if (e) {
       setErrorMsg(e)
       window.history.replaceState({}, '', '/')
     }
-    if (loggedOut) {
-      window.history.replaceState({}, '', '/')
-      setLoading(false)
-      return
-    }
+    // 미로그인이어도 강제 redirect 안 함 — 공개 메인 표시. user 는 헤더 "OAuth 로그인" 버튼으로 명시적 진입.
     api.me()
       .then(data => {
-        if (data) {
-          setUser(data)
-          setLoading(false)
-        } else if (e) {
-          setLoading(false)
-        } else {
-          window.location.href = '/login'
-        }
+        if (data) setUser(data)
+        setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [])
 
-  const logout = async (): Promise<void> => {
-    await api.logout()
-    window.location.href = '/?logout=1'
+  // GET /api/logout 으로 navigate → 백엔드가 IdP RP-initiated logout 체인 트리거.
+  const logout = (): void => {
+    window.location.href = '/api/logout'
   }
 
   if (loading) {
@@ -57,7 +46,8 @@ export default function Page() {
     )
   }
 
-  if (!user) return <LoginPage error={errorMsg} />
+  // ?error 케이스는 LoginPage 로. 그 외엔 HelpDeskApp 공개 모드.
+  if (errorMsg) return <LoginPage error={errorMsg} />
   return <HelpDeskApp user={user} onLogout={logout} />
 }
 
@@ -119,7 +109,7 @@ const STATUS_COLOR: Record<TicketStatus, string> = {
   closed:   'bg-slate-200 text-slate-500',
 }
 
-function HelpDeskApp({ user, onLogout }: { user: CurrentUser; onLogout: () => void }) {
+function HelpDeskApp({ user, onLogout }: { user: CurrentUser | null; onLogout: () => void }) {
   const [tickets, setTickets] = useState<TicketSummary[]>([])
   const [statusFilter, setStatusFilter] = useState<TicketStatus | ''>('')
   const [priorityFilter, setPriorityFilter] = useState<TicketPriority | ''>('')
@@ -127,7 +117,8 @@ function HelpDeskApp({ user, onLogout }: { user: CurrentUser; onLogout: () => vo
   const [detail, setDetail] = useState<TicketDetail | null>(null)
   const [showNewForm, setShowNewForm] = useState(false)
 
-  const displayName = user.display_name ?? user.sub
+  const authed = user != null
+  const displayName = user ? (user.display_name ?? user.sub) : ''
 
   const refresh = async (): Promise<void> => {
     const list = await api.listTickets({
@@ -139,8 +130,13 @@ function HelpDeskApp({ user, onLogout }: { user: CurrentUser; onLogout: () => vo
   }
 
   useEffect(() => {
+    if (!authed) {
+      setTickets([])
+      setSelectedId(null)
+      return
+    }
     void refresh()
-  }, [statusFilter, priorityFilter])
+  }, [authed, statusFilter, priorityFilter])
 
   useEffect(() => {
     if (selectedId == null) {
@@ -198,18 +194,27 @@ function HelpDeskApp({ user, onLogout }: { user: CurrentUser; onLogout: () => vo
         </span>
         <h1 className="font-semibold">HelpDesk</h1>
         <div className="flex-1" />
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-amber-600 text-white flex items-center justify-center font-semibold uppercase text-sm">
-            {displayName[0]}
+        {authed ? (
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-amber-600 text-white flex items-center justify-center font-semibold uppercase text-sm">
+              {displayName[0]}
+            </div>
+            <span className="text-sm text-slate-700">{displayName}</span>
+            <button
+              onClick={onLogout}
+              className="ml-2 text-sm text-slate-600 hover:text-slate-900 rounded border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+            >
+              로그아웃
+            </button>
           </div>
-          <span className="text-sm text-slate-700">{displayName}</span>
-          <button
-            onClick={onLogout}
-            className="ml-2 text-sm text-slate-600 hover:text-slate-900 rounded border border-slate-300 px-3 py-1.5 hover:bg-slate-100"
+        ) : (
+          <a
+            href="/login"
+            className="text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 active:bg-amber-800 rounded px-4 py-1.5 transition-colors"
           >
-            로그아웃
-          </button>
-        </div>
+            OAuth 로그인
+          </a>
+        )}
       </header>
 
       {/* Body */}
@@ -233,16 +238,20 @@ function HelpDeskApp({ user, onLogout }: { user: CurrentUser; onLogout: () => vo
               <option value="">모든 우선순위</option>
               {TICKET_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
-            <button
-              onClick={() => setShowNewForm(true)}
-              className="ml-auto text-xs rounded bg-amber-600 hover:bg-amber-700 text-white px-3 py-1"
-            >
-              + 새 티켓
-            </button>
+            {authed && (
+              <button
+                onClick={() => setShowNewForm(true)}
+                className="ml-auto text-xs rounded bg-amber-600 hover:bg-amber-700 text-white px-3 py-1"
+              >
+                + 새 티켓
+              </button>
+            )}
           </div>
           <ul className="flex-1 overflow-y-auto">
             {tickets.length === 0 && (
-              <li className="px-4 py-6 text-sm text-slate-400">티켓이 없습니다</li>
+              <li className="px-4 py-6 text-sm text-slate-400">
+                {authed ? '티켓이 없습니다' : '로그인하면 본인 티켓을 볼 수 있어요'}
+              </li>
             )}
             {tickets.map(t => (
               <li
@@ -273,9 +282,9 @@ function HelpDeskApp({ user, onLogout }: { user: CurrentUser; onLogout: () => vo
 
         {/* Detail */}
         <section className="flex-1 flex flex-col overflow-hidden">
-          {showNewForm ? (
+          {showNewForm && authed ? (
             <NewTicketForm onCancel={() => setShowNewForm(false)} onCreate={createTicket} />
-          ) : detail ? (
+          ) : detail && user ? (
             <TicketDetailPane
               detail={detail}
               currentSub={user.sub}
@@ -285,8 +294,10 @@ function HelpDeskApp({ user, onLogout }: { user: CurrentUser; onLogout: () => vo
               onDelete={() => deleteTicket(detail.id)}
             />
           ) : (
-            <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
-              왼쪽에서 티켓을 선택하거나 새로 만드세요
+            <div className="flex-1 flex items-center justify-center text-slate-400 text-sm text-center px-6">
+              {authed
+                ? '왼쪽에서 티켓을 선택하거나 새로 만드세요'
+                : '오른쪽 상단 "OAuth 로그인" 으로 들어가면 티켓을 등록할 수 있어요'}
             </div>
           )}
         </section>

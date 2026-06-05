@@ -10,7 +10,7 @@ interface UseCurrentUserResult {
 }
 
 // /api/me 로 현재 사용자 로드.
-// URL 의 ?error / ?logout 파라미터를 한 번 흡수해서 깔끔한 / 로 정리.
+// URL 의 ?error 파라미터를 한 번 흡수해서 깔끔한 / 로 정리.
 // 미로그인 + 에러도 없으면 /login 으로 자동 리다이렉트 (silent SSO 시도).
 export function useCurrentUser(): UseCurrentUserResult {
   const [user, setUser] = useState<CurrentUser | null>(null)
@@ -20,14 +20,9 @@ export function useCurrentUser(): UseCurrentUserResult {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const e = params.get('error')
-    const loggedOut = params.get('logout')
 
-    if (e || loggedOut) {
+    if (e) {
       window.history.replaceState({}, '', '/')
-    }
-    if (loggedOut) {
-      setLoading(false)
-      return
     }
 
     api.me()
@@ -45,9 +40,10 @@ export function useCurrentUser(): UseCurrentUserResult {
       .catch(() => setLoading(false))
   }, [])
 
+  // 백엔드 /api/logout 으로 navigate → 백엔드가 세션 무효화 + IdP /oauth/logout 으로 redirect 체인.
+  // IdP 가 자기 세션도 끊고 post_logout_redirect_uri (?logout=1) 로 돌려보냄.
   const logout = useCallback(async (): Promise<void> => {
-    await api.logout()
-    window.location.href = '/?logout=1'
+    window.location.href = '/api/logout'
   }, [])
 
   return { user, loading, errorMsg, logout }

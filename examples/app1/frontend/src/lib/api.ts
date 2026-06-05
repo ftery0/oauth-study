@@ -9,7 +9,6 @@ async function json<T>(input: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   me:        () => fetch('/api/me').then(r => (r.ok ? (r.json() as Promise<CurrentUser>) : null)),
-  logout:    () => fetch('/api/logout', { method: 'POST' }),
 
   listNotebooks:  () => json<Notebook[]>('/api/notebooks'),
   createNotebook: (title: string) => json<Notebook>('/api/notebooks', {
