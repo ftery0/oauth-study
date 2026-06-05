@@ -40,6 +40,9 @@ func LoginHandler(tmpl *template.Template) http.HandlerFunc {
 		clientID := r.FormValue("client_id")
 		redirectURI := r.FormValue("redirect_uri")
 		scope := r.FormValue("scope")
+		codeChallenge := r.FormValue("code_challenge")
+		codeChallengeMethod := r.FormValue("code_challenge_method")
+		nonce := r.FormValue("nonce")
 
 		// 1. 사용자 확인 + bcrypt
 		//    미존재 username 도 dummy hash 로 동일 cost bcrypt → 응답 시간으로 enumeration 불가
@@ -58,6 +61,7 @@ func LoginHandler(tmpl *template.Template) http.HandlerFunc {
 			[]byte(password),
 		)
 		if !found || bcryptErr != nil {
+			AuditWarn(r, "login.failed", "username", username, "reason", map[bool]string{true: "bad_password", false: "user_not_found"}[found])
 			// 미존재 user 케이스에서 ErrUserNotFound 외 다른 에러는 로그
 			if err != nil && !errors.Is(err, store.ErrUserNotFound) {
 				// DB 장애 등은 500 도 합리적이지만 학습 단계 사용자 enumeration 방어 우선
@@ -66,13 +70,16 @@ func LoginHandler(tmpl *template.Template) http.HandlerFunc {
 
 			csrfToken, _ := NewCSRFToken(w)
 			tmpl.ExecuteTemplate(w, "login.html", loginPageData{
-				ClientName:  clientID,
-				State:       state,
-				ClientID:    clientID,
-				RedirectURI: redirectURI,
-				Scope:       scope,
-				ErrorMsg:    "아이디 또는 비밀번호가 틀렸습니다",
-				CSRFToken:   csrfToken,
+				ClientName:          clientID,
+				State:               state,
+				ClientID:            clientID,
+				RedirectURI:         redirectURI,
+				Scope:               scope,
+				ErrorMsg:            "아이디 또는 비밀번호가 틀렸습니다",
+				CSRFToken:           csrfToken,
+				CodeChallenge:       codeChallenge,
+				CodeChallengeMethod: codeChallengeMethod,
+				Nonce:               nonce,
 			})
 			return
 		}
@@ -103,13 +110,18 @@ func LoginHandler(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		store.AuthCodes.Store(code, models.AuthCode{
-			Code:        code,
-			ClientID:    clientID,
-			UserID:      user.ID, // DB 의 UUID
-			RedirectURI: redirectURI,
-			Scope:       scope,
-			ExpiresAt:   time.Now().Add(10 * time.Minute),
+			Code:                code,
+			ClientID:            clientID,
+			UserID:              user.ID, // DB 의 UUID
+			RedirectURI:         redirectURI,
+			Scope:               scope,
+			ExpiresAt:           time.Now().Add(10 * time.Minute),
+			CodeChallenge:       codeChallenge,
+			CodeChallengeMethod: codeChallengeMethod,
+			Nonce:               nonce,
+			AuthTime:            time.Now(),
 		})
+		AuditEvent(r, "login.success", "sub", user.ID, "client_id", clientID, "username", username)
 
 		// 7. 안전 redirect (Open Redirect 방어)
 		safeOAuthRedirect(w, r, redirectURI, map[string]string{

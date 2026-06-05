@@ -12,14 +12,18 @@ import (
 
 // loginPageData: login.html 템플릿에 넘겨줄 데이터 구조체.
 // CSRFToken 은 PR4b 에서 Double-Submit Cookie 용으로 추가.
+// PKCE/Nonce 는 hidden 필드로 흘려 보내 로그인 후 발급되는 AuthCode 에 동승.
 type loginPageData struct {
-	ClientName  string
-	State       string
-	ClientID    string
-	RedirectURI string
-	Scope       string
-	ErrorMsg    string
-	CSRFToken   string
+	ClientName          string
+	State               string
+	ClientID            string
+	RedirectURI         string
+	Scope               string
+	ErrorMsg            string
+	CSRFToken           string
+	CodeChallenge       string
+	CodeChallengeMethod string
+	Nonce               string
 }
 
 // AuthorizeHandler: GET /oauth/authorize 처리.
@@ -39,6 +43,9 @@ func AuthorizeHandler(tmpl *template.Template) http.HandlerFunc {
 		state := q.Get("state")
 		scope := q.Get("scope")
 		prompt := q.Get("prompt")
+		codeChallenge := q.Get("code_challenge")
+		codeChallengeMethod := q.Get("code_challenge_method")
+		nonce := q.Get("nonce")
 
 		// 1. redirect_uri 검증 — 가장 먼저 (Open Redirect 방어)
 		client, ok := store.Clients.GetByClientID(clientID)
@@ -54,6 +61,21 @@ func AuthorizeHandler(tmpl *template.Template) http.HandlerFunc {
 				"state": state,
 			})
 			return
+		}
+
+		// 2-b. PKCE method 검증 — challenge 가 있으면 S256 만 허용 (OAuth 2.1).
+		if codeChallenge != "" {
+			if codeChallengeMethod == "" {
+				codeChallengeMethod = "plain"
+			}
+			if codeChallengeMethod != "S256" {
+				safeOAuthRedirect(w, r, redirectURI, map[string]string{
+					"error":             "invalid_request",
+					"error_description": "code_challenge_method must be S256",
+					"state":             state,
+				})
+				return
+			}
 		}
 
 		// 3. IdP 세션 조회 — Phase-R 단순화: LastGroupID 더 이상 안 본다
@@ -84,12 +106,16 @@ func AuthorizeHandler(tmpl *template.Template) http.HandlerFunc {
 				return
 			}
 			store.AuthCodes.Store(code, models.AuthCode{
-				Code:        code,
-				ClientID:    clientID,
-				UserID:      userID,
-				RedirectURI: redirectURI,
-				Scope:       scope,
-				ExpiresAt:   time.Now().Add(10 * time.Minute),
+				Code:                code,
+				ClientID:            clientID,
+				UserID:              userID,
+				RedirectURI:         redirectURI,
+				Scope:               scope,
+				ExpiresAt:           time.Now().Add(10 * time.Minute),
+				CodeChallenge:       codeChallenge,
+				CodeChallengeMethod: codeChallengeMethod,
+				Nonce:               nonce,
+				AuthTime:            time.Now(),
 			})
 			safeOAuthRedirect(w, r, redirectURI, map[string]string{
 				"code":  code,
@@ -111,12 +137,15 @@ func AuthorizeHandler(tmpl *template.Template) http.HandlerFunc {
 				return
 			}
 			data := loginPageData{
-				ClientName:  client.Name,
-				State:       state,
-				ClientID:    clientID,
-				RedirectURI: redirectURI,
-				Scope:       scope,
-				CSRFToken:   csrfToken,
+				ClientName:          client.Name,
+				State:               state,
+				ClientID:            clientID,
+				RedirectURI:         redirectURI,
+				Scope:               scope,
+				CSRFToken:           csrfToken,
+				CodeChallenge:       codeChallenge,
+				CodeChallengeMethod: codeChallengeMethod,
+				Nonce:               nonce,
 			}
 			if err := tmpl.ExecuteTemplate(w, "login.html", data); err != nil {
 				http.Error(w, "템플릿 렌더링 실패", http.StatusInternalServerError)

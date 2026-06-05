@@ -23,7 +23,6 @@ export const api = {
     const r = await fetch('/api/me', { cache: 'no-store' })
     return r.ok ? ((await r.json()) as CurrentUser) : null
   },
-  logout: () => fetch('/api/logout', { method: 'POST', cache: 'no-store' }),
 
   listTickets: (filters: { status?: TicketStatus; priority?: TicketPriority } = {}) => {
     const qs = new URLSearchParams()

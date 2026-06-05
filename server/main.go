@@ -44,6 +44,9 @@ func main() {
 			if err := db.RunMigrations(ctx); err != nil {
 				log.Fatal("migration 실패: ", err)
 			}
+			if err := db.BackfillClientSecretHashes(ctx); err != nil {
+				log.Fatal("client_secret hash backfill 실패: ", err)
+			}
 			pgClients := pgstore.NewClientStore(db.Pool)
 			pgUsers := pgstore.NewUserStore(db.Pool)
 			// 시드 (이미 있으면 ON CONFLICT DO NOTHING / ErrUserAlreadyExists 흡수)

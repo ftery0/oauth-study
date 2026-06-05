@@ -7,7 +7,7 @@
 | **Notebook** | 노트 / 위키 | Spring Boot + React (TS) | MariaDB | http://localhost:5181 |
 | **TaskBoard** | 칸반 보드 | Node Express + Vue 3 (TS) | MongoDB | http://localhost:5182 |
 | **HelpDesk** | 고객 지원 티켓 | FastAPI + Next.js (TS) | PostgreSQL | http://localhost:5183 |
-| IdP / DAuth | 인가 서버 | Go | Postgres | http://localhost:8080 |
+| IdP / OAuth | 인가 서버 | Go | Postgres | http://localhost:8080 |
 
 ---
 
@@ -46,7 +46,7 @@ docker compose down -v
 
 ```
 .
-├── server/                IdP / DAuth (Go)
+├── server/                IdP / OAuth (Go)
 ├── examples/
 │   ├── app1/              Notebook  (Spring + React)
 │   ├── app2/              TaskBoard (Node + Vue)

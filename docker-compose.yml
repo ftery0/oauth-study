@@ -1,11 +1,11 @@
-# DAuth 학습용 인프라 + 3 앱 풀스택 컨테이너
+# OAuth 학습용 인프라 + 3 앱 풀스택 컨테이너
 # 빠른 기동: docker compose up -d
 # 종료: docker compose down
 # 데이터 초기화: docker compose down -v
 #
 # 컨테이너 구성 (총 11 개):
-#   postgres        — IdP 의 Postgres (호스트 5433)
-#   dauth-idp       — IdP / DAuth 서버 (호스트 8080)
+#   oauth-postgres  — IdP 의 Postgres (호스트 5433)
+#   oauth-idp       — IdP / OAuth 서버 (호스트 8080)
 #   app1-mariadb    — Notebook 의 MariaDB (호스트 3307)
 #   app1-backend    — Notebook Spring (호스트 8011)
 #   app1-frontend   — Notebook React + nginx (호스트 5181)
@@ -17,37 +17,37 @@
 #   app3-frontend   — HelpDesk Next standalone (호스트 5183)
 services:
   # ─────────── IdP 인프라 ───────────
-  postgres:
+  oauth-postgres:
     image: postgres:17-alpine
-    container_name: dauth-postgres
+    container_name: oauth-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: dauth
-      POSTGRES_USER: dauth
-      POSTGRES_PASSWORD: dauth-dev
+      POSTGRES_DB: oauth
+      POSTGRES_USER: oauth
+      POSTGRES_PASSWORD: oauth-dev
     ports:
       - "5433:5432"
     volumes:
-      - dauth-postgres:/var/lib/postgresql/data
+      - oauth-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dauth -d dauth"]
+      test: ["CMD-SHELL", "pg_isready -U oauth -d oauth"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  dauth-idp:
+  oauth-idp:
     build:
       context: ./server
-    container_name: dauth-idp
+    container_name: oauth-idp
     restart: unless-stopped
     depends_on:
-      postgres:
+      oauth-postgres:
         condition: service_healthy
     environment:
       APP_ENV: development
       OAUTH_PORT: "8080"
       OAUTH_ISSUER: "http://localhost:8080"
-      DATABASE_URL: "postgres://dauth:dauth-dev@postgres:5432/dauth?sslmode=disable"
+      DATABASE_URL: "postgres://oauth:oauth-dev@oauth-postgres:5432/oauth?sslmode=disable"
     ports:
       - "8080:8080"
 
@@ -79,12 +79,12 @@ services:
     depends_on:
       app1-mariadb:
         condition: service_healthy
-      dauth-idp:
+      oauth-idp:
         condition: service_started
     environment:
       PORT: "8011"
       OAUTH_SERVER_URL: "http://localhost:8080"
-      OAUTH_INTERNAL_URL: "http://dauth-idp:8080"
+      OAUTH_INTERNAL_URL: "http://oauth-idp:8080"
       OAUTH_CLIENT_ID: app1
       OAUTH_CLIENT_SECRET: app1-secret
       OAUTH_REDIRECT_URI: "http://localhost:8011/callback"
@@ -144,12 +144,12 @@ services:
     depends_on:
       app2-mongo:
         condition: service_healthy
-      dauth-idp:
+      oauth-idp:
         condition: service_started
     environment:
       PORT: "8012"
       OAUTH_SERVER_URL: "http://localhost:8080"
-      OAUTH_INTERNAL_URL: "http://dauth-idp:8080"
+      OAUTH_INTERNAL_URL: "http://oauth-idp:8080"
       OAUTH_CLIENT_ID: app2
       OAUTH_CLIENT_SECRET: app2-secret
       OAUTH_REDIRECT_URI: "http://localhost:8012/callback"
@@ -196,13 +196,13 @@ services:
     depends_on:
       app3-postgres:
         condition: service_healthy
-      dauth-idp:
+      oauth-idp:
         condition: service_started
     environment:
       PORT: "8013"
       HOST: "0.0.0.0"
       OAUTH_SERVER_URL: "http://localhost:8080"
-      OAUTH_INTERNAL_URL: "http://dauth-idp:8080"
+      OAUTH_INTERNAL_URL: "http://oauth-idp:8080"
       OAUTH_CLIENT_ID: app3
       OAUTH_CLIENT_SECRET: app3-secret
       OAUTH_REDIRECT_URI: "http://localhost:8013/callback"
@@ -225,7 +225,7 @@ services:
       - "5183:5183"
 
 volumes:
-  dauth-postgres:
+  oauth-postgres:
   app1-mariadb:
   app2-mongo:
   app3-postgres:

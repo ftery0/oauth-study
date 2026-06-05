@@ -38,6 +38,12 @@ type Config struct {
 	DatabaseURL        string // Postgres DSN. 비어있으면 DB 연결 시도하지 않음 (P2-B)
 }
 
+// issuerForDiscovery: Discovery 엔드포인트에서 쓰는 issuer URL.
+// Load() 가 main 부팅 시 설정한 뒤 IssuerForDiscovery 가 읽어간다.
+var issuerForDiscovery string
+
+func IssuerForDiscovery() string { return issuerForDiscovery }
+
 func Load() Config {
 	loadDotEnvOnce()
 
@@ -58,12 +64,14 @@ func Load() Config {
 
 	jwtSecret := requireSecret(env, "OAUTH_JWT_SECRET", devDefaultJWTSecret)
 	idpSessionSecret := requireSecret(env, "IDP_SESSION_SECRET", devDefaultIdPSessionSecret)
-	adminSessionSecret := requireSecret(env, "DAUTH_ADMIN_SESSION_SECRET", devDefaultAdminSessionSecret)
-	adminPasswordHash := requireSecret(env, "DAUTH_ADMIN_PASSWORD_HASH", devDefaultAdminPasswordHash)
+	adminSessionSecret := requireSecret(env, "OAUTH_ADMIN_SESSION_SECRET", devDefaultAdminSessionSecret)
+	adminPasswordHash := requireSecret(env, "OAUTH_ADMIN_PASSWORD_HASH", devDefaultAdminPasswordHash)
 
 	// DATABASE_URL: 비어있으면 DB 연결 안 함 (P2-B 학습 호환).
-	// 권장 형식: postgres://dauth:dauth-dev@localhost:5433/dauth?sslmode=disable
+	// 권장 형식: postgres://oauth:oauth-dev@localhost:5433/oauth?sslmode=disable
 	databaseURL := os.Getenv("DATABASE_URL")
+
+	issuerForDiscovery = issuer
 
 	return Config{
 		Env:                env,

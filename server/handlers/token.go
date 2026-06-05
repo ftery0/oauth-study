@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -26,11 +28,13 @@ func TokenHandler(w http.ResponseWriter, r *http.Request) {
 	// 클라이언트 앱은 HTTP Basic Auth로 자신을 증명
 	clientID, clientSecret, ok := r.BasicAuth()
 	if !ok {
+		AuditWarn(r, "token.client_auth_missing")
 		tokenError(w, "invalid_client", "client 인증 실패", http.StatusUnauthorized)
 		return
 	}
 	client, ok := store.Clients.GetByClientID(clientID)
-	if !ok || client.ClientSecret != clientSecret {
+	if !ok || !store.VerifySecret(client, clientSecret) {
+		AuditWarn(r, "token.client_auth_failed", "client_id", clientID)
 		tokenError(w, "invalid_client", "client 인증 실패", http.StatusUnauthorized)
 		return
 	}
@@ -40,10 +44,9 @@ func TokenHandler(w http.ResponseWriter, r *http.Request) {
 	case "authorization_code":
 		handleAuthorizationCode(w, r, clientID)
 	case "refresh_token":
-		// Refresh Token Grant: 만료된 access token을 refresh token으로 갱신
-		// 장점: 사용자가 다시 로그인하지 않아도 됨
 		handleRefreshToken(w, r, clientID)
 	default:
+		AuditWarn(r, "token.unsupported_grant_type", "client_id", clientID, "grant_type", r.FormValue("grant_type"))
 		tokenError(w, "unsupported_grant_type", "지원하지 않는 grant_type", http.StatusBadRequest)
 	}
 }
@@ -51,6 +54,7 @@ func TokenHandler(w http.ResponseWriter, r *http.Request) {
 func handleAuthorizationCode(w http.ResponseWriter, r *http.Request, clientID string) {
 	code        := r.FormValue("code")
 	redirectURI := r.FormValue("redirect_uri")
+	codeVerifier := r.FormValue("code_verifier")
 
 	if code == "" || redirectURI == "" {
 		tokenError(w, "invalid_request", "code 또는 redirect_uri가 필요합니다", http.StatusBadRequest)
@@ -70,7 +74,35 @@ func handleAuthorizationCode(w http.ResponseWriter, r *http.Request, clientID st
 		return
 	}
 
-	issueTokens(w, ac.UserID, ac.ClientID, ac.Scope)
+	// PKCE (RFC 7636): /authorize 에서 challenge 가 있었다면 verifier 검증 필수.
+	if ac.CodeChallenge != "" {
+		if codeVerifier == "" {
+			tokenError(w, "invalid_request", "code_verifier 필요", http.StatusBadRequest)
+			return
+		}
+		if !verifyPKCE(ac.CodeChallenge, ac.CodeChallengeMethod, codeVerifier) {
+			tokenError(w, "invalid_grant", "PKCE 검증 실패", http.StatusBadRequest)
+			return
+		}
+	}
+
+	auditTokenIssued(r, "authorization_code", ac.UserID, ac.ClientID, ac.Scope)
+	issueTokens(w, ac.UserID, ac.ClientID, ac.Scope, ac.Nonce, ac.AuthTime)
+}
+
+// verifyPKCE: S256(verifier) == challenge.
+// method 가 plain (또는 비어있음) 일 때는 그대로 비교. 학습용 호환성 — 운영에선 S256 강제 권장.
+func verifyPKCE(challenge, method, verifier string) bool {
+	switch method {
+	case "S256":
+		sum := sha256.Sum256([]byte(verifier))
+		got := base64.RawURLEncoding.EncodeToString(sum[:])
+		return got == challenge
+	case "plain", "":
+		return verifier == challenge
+	default:
+		return false
+	}
 }
 
 func handleRefreshToken(w http.ResponseWriter, r *http.Request, clientID string) {
@@ -90,11 +122,14 @@ func handleRefreshToken(w http.ResponseWriter, r *http.Request, clientID string)
 		return
 	}
 
-	issueTokens(w, rt.UserID, rt.ClientID, rt.Scope)
+	auditTokenIssued(r, "refresh_token", rt.UserID, rt.ClientID, rt.Scope)
+	// refresh 시점엔 신선한 nonce 없음. auth_time 도 그대로 유지 (이 grant 에선 시점 기록 X).
+	issueTokens(w, rt.UserID, rt.ClientID, rt.Scope, "", time.Time{})
 }
 
-// issueTokens: access token + refresh token 동시 발급
-func issueTokens(w http.ResponseWriter, userID, clientID, scope string) {
+// issueTokens: access token + refresh token 동시 발급.
+// scope 에 openid 가 있으면 ID Token 도 같이 발급 (P3.1).
+func issueTokens(w http.ResponseWriter, userID, clientID, scope, nonce string, authTime time.Time) {
 	accessToken, err := token.Create(userID, clientID, scope)
 	if err != nil {
 		http.Error(w, "액세스 토큰 생성 실패", http.StatusInternalServerError)
@@ -116,13 +151,59 @@ func issueTokens(w http.ResponseWriter, userID, clientID, scope string) {
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 	})
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	resp := map[string]any{
 		"access_token":  accessToken,
 		"token_type":    "Bearer",
 		"expires_in":    900, // 15분 (초 단위)
 		"refresh_token": refreshToken,
-	})
+		"scope":         scope,
+	}
+
+	// OIDC: openid scope 가 있으면 ID Token 발급.
+	if hasOpenIDScope(scope) {
+		idToken, err := token.CreateIDToken(userID, clientID, nonce, authTime)
+		if err != nil {
+			http.Error(w, "ID 토큰 생성 실패", http.StatusInternalServerError)
+			return
+		}
+		resp["id_token"] = idToken
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+// auditTokenIssued: handleAuthorizationCode / handleRefreshToken 에서 발급 직후 호출.
+func auditTokenIssued(r *http.Request, grant, userID, clientID, scope string) {
+	AuditEvent(r, "token.issued",
+		"grant", grant,
+		"sub", userID,
+		"client_id", clientID,
+		"scope", scope,
+	)
+}
+
+func hasOpenIDScope(scope string) bool {
+	for _, s := range splitScope(scope) {
+		if s == "openid" {
+			return true
+		}
+	}
+	return false
+}
+
+func splitScope(scope string) []string {
+	out := []string{}
+	start := 0
+	for i := 0; i <= len(scope); i++ {
+		if i == len(scope) || scope[i] == ' ' {
+			if i > start {
+				out = append(out, scope[start:i])
+			}
+			start = i + 1
+		}
+	}
+	return out
 }
 
 func generateRefreshToken() (string, error) {

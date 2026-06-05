@@ -23,15 +23,22 @@ const minPasswordLen = 8
 
 // registerPageData: register.html 에 넘기는 데이터.
 type registerPageData struct {
-	ClientName  string
-	ClientID    string
-	RedirectURI string
-	State       string
-	Scope       string
-	Username    string // 에러 시 입력값 보존
-	ErrorMsg    string
-	CSRFToken   string
+	ClientName          string
+	ClientID            string
+	RedirectURI         string
+	State               string
+	Scope               string
+	Username            string // 에러 시 입력값 보존
+	Email               string // 에러 시 입력값 보존
+	ErrorMsg            string
+	CSRFToken           string
+	CodeChallenge       string
+	CodeChallengeMethod string
+	Nonce               string
 }
+
+// emailPattern: 간단한 형식 검증. 학습 용으로 RFC 5322 까지는 안 감.
+var emailPattern = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
 
 // RegisterGetHandler: GET /oauth/register — 회원가입 폼.
 // /oauth/authorize 와 같은 client_id / redirect_uri 검증을 거친 후 폼 표시.
@@ -56,12 +63,15 @@ func RegisterGetHandler(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		tmpl.ExecuteTemplate(w, "register.html", registerPageData{
-			ClientName:  client.Name,
-			ClientID:    clientID,
-			RedirectURI: redirectURI,
-			State:       state,
-			Scope:       scope,
-			CSRFToken:   csrfToken,
+			ClientName:          client.Name,
+			ClientID:            clientID,
+			RedirectURI:         redirectURI,
+			State:               state,
+			Scope:               scope,
+			CSRFToken:           csrfToken,
+			CodeChallenge:       q.Get("code_challenge"),
+			CodeChallengeMethod: q.Get("code_challenge_method"),
+			Nonce:               q.Get("nonce"),
 		})
 	}
 }
@@ -90,6 +100,7 @@ func RegisterPostHandler(tmpl *template.Template) http.HandlerFunc {
 		}
 
 		username := strings.TrimSpace(r.FormValue("username"))
+		email := strings.TrimSpace(r.FormValue("email"))
 		password := r.FormValue("password")
 		passwordConfirm := r.FormValue("password_confirm")
 		clientID := r.FormValue("client_id")
@@ -108,20 +119,28 @@ func RegisterPostHandler(tmpl *template.Template) http.HandlerFunc {
 		renderFormError := func(msg string) {
 			csrfToken, _ := NewCSRFToken(w)
 			tmpl.ExecuteTemplate(w, "register.html", registerPageData{
-				ClientName:  client.Name,
-				ClientID:    clientID,
-				RedirectURI: redirectURI,
-				State:       state,
-				Scope:       scope,
-				Username:    username,
-				ErrorMsg:    msg,
-				CSRFToken:   csrfToken,
+				ClientName:          client.Name,
+				ClientID:            clientID,
+				RedirectURI:         redirectURI,
+				State:               state,
+				Scope:               scope,
+				Username:            username,
+				Email:               email,
+				ErrorMsg:            msg,
+				CSRFToken:           csrfToken,
+				CodeChallenge:       r.FormValue("code_challenge"),
+				CodeChallengeMethod: r.FormValue("code_challenge_method"),
+				Nonce:               r.FormValue("nonce"),
 			})
 		}
 
-		// 2. username / password 유효성
+		// 2. username / email / password 유효성
 		if !usernamePattern.MatchString(username) {
 			renderFormError("아이디는 영문 소문자/숫자/_/-, 3~32 자")
+			return
+		}
+		if email != "" && !emailPattern.MatchString(email) {
+			renderFormError("이메일 형식이 올바르지 않습니다")
 			return
 		}
 		if len(password) < minPasswordLen {
@@ -147,6 +166,8 @@ func RegisterPostHandler(tmpl *template.Template) http.HandlerFunc {
 			Username:     username,
 			PasswordHash: string(hash),
 			DisplayName:  username,
+			Email:        email,
+			// EmailVerified: 학습 범위 외 (실 운영에서는 메일 확인 후 true).
 		}
 		if err := store.Users.Create(ctx, newUser); err != nil {
 			if errors.Is(err, store.ErrUserAlreadyExists) {
@@ -179,13 +200,18 @@ func RegisterPostHandler(tmpl *template.Template) http.HandlerFunc {
 			return
 		}
 		store.AuthCodes.Store(code, models.AuthCode{
-			Code:        code,
-			ClientID:    clientID,
-			UserID:      newUser.ID,
-			RedirectURI: redirectURI,
-			Scope:       scope,
-			ExpiresAt:   time.Now().Add(10 * time.Minute),
+			Code:                code,
+			ClientID:            clientID,
+			UserID:              newUser.ID,
+			RedirectURI:         redirectURI,
+			Scope:               scope,
+			ExpiresAt:           time.Now().Add(10 * time.Minute),
+			CodeChallenge:       r.FormValue("code_challenge"),
+			CodeChallengeMethod: r.FormValue("code_challenge_method"),
+			Nonce:               r.FormValue("nonce"),
+			AuthTime:            time.Now(),
 		})
+		AuditEvent(r, "register.success", "sub", newUser.ID, "client_id", clientID, "username", username)
 		safeOAuthRedirect(w, r, redirectURI, map[string]string{
 			"code":  code,
 			"state": state,

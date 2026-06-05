@@ -118,6 +118,9 @@ async def callback(
 
     request.session["access_token"] = tokens["access_token"]
     request.session["refresh_token"] = tokens.get("refresh_token")
+    # id_token: RP-initiated logout 의 id_token_hint 로 사용 (openid scope 일 때 IdP 가 발급)
+    if isinstance(tokens.get("id_token"), str):
+        request.session["id_token"] = tokens["id_token"]
 
     info = await _fetch_user_info(tokens["access_token"])
     if info and isinstance(info.get("sub"), str):
@@ -158,10 +161,21 @@ async def me(request: Request, session: AsyncSession = Depends(get_session)):
     return JSONResponse(info)
 
 
-@router.post("/api/logout")
+@router.get("/api/logout")
 async def logout(request: Request):
+    """앱 세션 무효화 + IdP RP-initiated logout 으로 redirect.
+
+    app 세션만 끊으면 IdP 세션이 살아있어 silent SSO 가 다시 자동 로그인시킴.
+    IdP /oauth/logout 으로 보내야 IdP 세션도 같이 폐기되고 진짜 로그아웃.
+    """
+    id_token_hint = request.session.get("id_token")
     request.session.clear()
-    return {"ok": True}
+
+    params: dict[str, str] = {"post_logout_redirect_uri": settings.frontend_url}
+    if isinstance(id_token_hint, str):
+        params["id_token_hint"] = id_token_hint
+    qs = urlencode(params)
+    return RedirectResponse(f"{settings.oauth_server_url}/oauth/logout?{qs}")
 
 
 async def require_user_sub(request: Request) -> str:
