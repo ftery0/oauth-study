@@ -37,9 +37,11 @@ public class OAuthController {
     private final ObjectMapper json = new ObjectMapper();
     private final SecureRandom random = new SecureRandom();
     private final UserRepository users;
+    private final WelcomeSeed welcomeSeed;
 
-    public OAuthController(UserRepository users) {
+    public OAuthController(UserRepository users, WelcomeSeed welcomeSeed) {
         this.users = users;
+        this.welcomeSeed = welcomeSeed;
     }
 
     @GetMapping("/login")
@@ -105,6 +107,8 @@ public class OAuthController {
                 },
                 () -> users.save(new User(sub, name))
             );
+            // 노트북이 0 개인 사용자에게 예시 콘텐츠 한 번 시드 (이미 있으면 no-op).
+            welcomeSeed.seedIfEmpty(sub);
             session.setAttribute("userSub", sub);
         }
 
