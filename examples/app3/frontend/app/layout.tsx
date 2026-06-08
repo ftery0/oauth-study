@@ -3,8 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
 
 export const metadata: Metadata = {
-  title: 'HelpDesk · app3',
-  description: '외부 고객 지원 포털',
+  title: 'HelpDesk — 고객 지원 워크스페이스',
+  description: '응대를 빠르고, 정확하게.',
 }
 
 export const viewport: Viewport = {
