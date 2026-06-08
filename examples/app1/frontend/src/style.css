@@ -1,3 +1,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-paper-100 text-ink-900;
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  }
+  h1, h2, h3 {
+    font-family: 'Lora', ui-serif, Georgia, serif;
+    letter-spacing: -0.01em;
+  }
+}

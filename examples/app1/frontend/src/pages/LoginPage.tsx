@@ -1,33 +1,41 @@
 export function LoginPage({ error }: { error: string | null }) {
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 antialiased text-slate-900">
-      <main className="w-full max-w-md bg-white rounded-2xl shadow-lg p-6 sm:p-8">
-        <header className="mb-6">
-          <div className="inline-flex items-center gap-2 mb-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-blue-500" />
-            <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">group-a</span>
+    <div className="min-h-screen bg-paper-100 flex items-center justify-center p-6 text-ink-900">
+      <main className="w-full max-w-lg">
+        <div className="mb-10 text-center">
+          <div className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-emerald-800/70 mb-4">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-700" />
+            group · a
           </div>
-          <h1 className="text-2xl font-semibold">Notebook</h1>
-          <p className="mt-1 text-sm text-slate-500">사내 노트 · Spring Boot + React</p>
-        </header>
-
-        {error && (
-          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700" role="alert">
-            오류: {error}
-          </div>
-        )}
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5 text-sm text-blue-900">
-          <p className="font-medium mb-1">silent SSO 시연</p>
-          <p>이미 같은 그룹(group-a)의 TaskBoard 에 로그인되어 있다면 폼 없이 자동 로그인됩니다.</p>
+          <h1 className="font-serif text-5xl text-ink-900 mb-3">Notebook</h1>
+          <p className="text-ink-500 italic">
+            "쓰는 동안 생각이 정리됩니다."
+          </p>
         </div>
 
-        <a
-          href="/login"
-          className="block w-full text-center rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-medium px-4 py-3 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          OAuth 로그인
-        </a>
+        <div className="bg-paper-50 border border-paper-200 rounded-lg shadow-sm px-8 py-7">
+          {error && (
+            <div className="mb-5 border-l-2 border-red-400 bg-red-50/60 pl-3 py-2 text-sm text-red-800" role="alert">
+              {error}
+            </div>
+          )}
+
+          <p className="text-sm text-ink-700 leading-relaxed mb-6">
+            이 노트북은 OAuth 로 보호됩니다. 같은 그룹의 다른 앱(TaskBoard)에 이미
+            로그인되어 있다면, 별도 입력 없이 곧바로 연결됩니다.
+          </p>
+
+          <a
+            href="/login"
+            className="block w-full text-center rounded-md bg-emerald-800 hover:bg-emerald-900 text-paper-50 font-medium px-4 py-3 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-700 focus:ring-offset-paper-50"
+          >
+            OAuth 로 계속하기
+          </a>
+
+          <p className="mt-4 text-[11px] text-ink-400 text-center">
+            계정이 없으면 로그인 화면에서 바로 만들 수 있어요.
+          </p>
+        </div>
       </main>
     </div>
   )
